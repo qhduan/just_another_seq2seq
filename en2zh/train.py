@@ -2,42 +2,46 @@
 对SequenceToSequence模型进行基本的参数组合测试
 """
 
+import sys
 import random
-import itertools
-from collections import OrderedDict
+import pickle
 
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-from sequence_to_sequence import SequenceToSequence
-from sequence_to_sequence import batch_flow
-from fake_data import generate
+sys.path.append('..')
 
 
 def test(bidirectional, cell_type, depth,
          attention_type, use_residual, use_dropout):
     """测试不同参数在生成的假数据上的运行结果"""
 
+    from sequence_to_sequence import SequenceToSequence
+    from sequence_to_sequence import batch_flow
+    from word_sequence import WordSequence # pylint: disable=unused-variable
+
+    x_data, y_data, ws_input, ws_target = pickle.load(open('data.pkl', 'rb'))
+
     # 获取一些假数据
-    x_data, y_data, ws_input, ws_target = generate(size=10000)
+    # x_data, y_data, ws_input, ws_target = generate(size=10000)
 
     # 训练部分
 
-    split = 9900
+    split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 2
-    batch_size = 32
+    n_epoch = 1
+    batch_size = 64
     steps = int(len(x_train) / batch_size) + 1
 
     config = tf.ConfigProto(
-        device_count={'CPU': 1, 'GPU': 0},
+        # device_count={'CPU': 1, 'GPU': 0},
         allow_soft_placement=True,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss/'
+    save_path = '/tmp/s2ss_en2zh/'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -58,7 +62,7 @@ def test(bidirectional, cell_type, depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
-                parallel_iterations=1 # for test
+                parallel_iterations=64 # for test
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -71,7 +75,7 @@ def test(bidirectional, cell_type, depth,
                 flow = batch_flow(
                     x_train, y_train, ws_input, ws_target, batch_size
                 )
-                bar = tqdm(range(steps),
+                bar = tqdm(range(steps), total=steps,
                            desc='epoch {}, loss=0.000000'.format(epoch))
                 for _ in bar:
                     x, xl, y, yl = next(flow)
@@ -164,60 +168,10 @@ def main():
     np.random.seed(0)
     tf.set_random_seed(0)
 
-    params = OrderedDict((
-        ('bidirectional', (True, False)),
-        ('cell_type', ('gru', 'lstm')),
-        ('depth', (1, 2, 3)),
-        ('attention_type', ('Luong', 'Bahdanau')),
-        ('use_residual', (True, False)),
-        ('use_dropout', (True, False)),
-    ))
-
-    loop = itertools.product(*params.values())
-
-    for param_value in loop:
-        param = OrderedDict(zip(params.keys(), param_value))
-        print('=' * 30)
-        for key, value in param.items():
-            print(key, ':', value)
-        print('-' * 30)
-        test(**param)
-
-    # 吐槽一下，上面的代码是下面的代码的 pythonic 的改写版本……
-    # 虽然可能不是一个最好的 pythonic 实现
-    # 我也不确定这样是不是真的好
-    #
-    # for bidirectional in (True, False):
-    #     for cell_type in ('gru', 'lstm'):
-    #         for depth in (1, 2, 3):
-    #             for attention_type in ('Luong', 'Bahdanau'):
-    #                 for use_residual in (True, False):
-    #                     for use_dropout in (True, False):
-    #                         print('=' * 30)
-    #                         print(
-    #                             'bidirectional:',
-    #                             bidirectional,
-    #                             '\n',
-    #                             'cell_type:',
-    #                             cell_type,
-    #                             '\n',
-    #                             'depth:',
-    #                             depth,
-    #                             '\n',
-    #                             'attention_type:',
-    #                             attention_type,
-    #                             '\n',
-    #                             'use_residual:',
-    #                             use_residual,
-    #                             '\n',
-    #                             'use_dropout:',
-    #                             use_dropout
-    #                         )
-    #                         print('-' * 30)
-    #                         test(
-    #                             bidirectional, cell_type, depth,
-    #                             attention_type, use_residual, use_dropout
-    #                         )
+    test(
+        True, 'lstm', 2,
+        'Bahdanau', True, True
+    )
 
 
 if __name__ == '__main__':

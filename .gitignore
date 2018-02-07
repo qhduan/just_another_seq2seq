@@ -2,3 +2,7 @@
 *.py[cod]
 .ipynb_checkpoints
 __pycache__
+
+*.tmx
+*.gz
+*.pkl

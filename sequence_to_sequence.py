@@ -142,6 +142,10 @@ class SequenceToSequence(object):
 
         self.alignment_history = alignment_history
 
+        assert not self.crf or \
+            (self.crf and isinstance(self.max_decode_step, int)), \
+            '如果CRF模式开启，则必须设置一个整数值的max_decode_step'
+
         assert (self.use_beamsearch_decode and not self.alignment_history) or \
             (not self.use_beamsearch_decode and self.alignment_history) or \
             (not self.use_beamsearch_decode and not self.alignment_history), \
@@ -160,7 +164,10 @@ class SequenceToSequence(object):
         """
         self.init_placeholders()
         self.build_encoder()
-        self.build_decoder()
+        if not self.crf:
+            self.build_decoder()
+        else:
+            self.build_decoder_crf()
 
         if self.mode == 'train':
             self.init_optimizer()
@@ -186,7 +193,14 @@ class SequenceToSequence(object):
             name='encoder_inputs_length'
         )
 
-        if self.mode == 'train':
+        if self.crf:
+            self.encoder_inputs_length = tf.fill(
+                dims=[self.batch_size],
+                value=self.max_decode_step,
+                name='encoder_inputs_length'
+            )
+
+        if self.mode == 'train' or self.crf:
             # 训练模式
 
             # 解码器输入，shape=(batch_size, max_len)
@@ -365,6 +379,53 @@ class SequenceToSequence(object):
                         for i in range(len(encoder_fw_state))
                     ])
 
+
+    def build_decoder_crf(self):
+        """构建crf解码器
+        """
+
+        with tf.variable_scope('decoder_crf'):
+            encoder_outputs = self.encoder_outputs
+
+            hidden_units = self.hidden_units
+            if self.bidirectional:
+                hidden_units *= 2
+
+            encoder_outputs = tf.concat(encoder_outputs,
+                                        axis=2)
+            encoder_outputs = tf.reshape(encoder_outputs,
+                                         [-1, hidden_units], name='crf_output')
+            self.encoder_outputs = encoder_outputs
+
+            # Initialize decoder embeddings to have variance=1.
+            sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
+            initializer = tf.random_uniform_initializer(
+                -sqrt3, sqrt3, dtype=tf.float32
+            )
+
+            crf_w = tf.get_variable('crf_w',
+                                    [hidden_units, self.target_vocab_size],
+                                    initializer=initializer)
+            crf_b = tf.get_variable('crf_b', [self.target_vocab_size],
+                                    initializer=tf.zeros_initializer())
+
+            self.decoder_outputs_decode = tf.reshape(
+                tf.matmul(encoder_outputs, crf_w) + crf_b,
+                shape=[self.batch_size,
+                       self.max_decode_step,
+                       self.target_vocab_size])
+
+            (
+                log_likelihood,
+                self.transition_params
+            ) = tf.contrib.crf.crf_log_likelihood(
+                self.decoder_outputs_decode,
+                self.decoder_inputs,
+                self.decoder_inputs_length)
+
+            self.loss = tf.reduce_mean(-log_likelihood)
+
+
     def build_decoder(self):
         """构建解码器
         """
@@ -496,150 +557,135 @@ class SequenceToSequence(object):
                 # Internally calls
                 # 'nn_ops.sparse_softmax_cross_entropy_with_logits' by default
 
-                if not self.crf:
-                    self.loss = seq2seq.sequence_loss(
-                        logits=self.decoder_logits_train,
-                        targets=self.decoder_targets_train,
-                        weights=masks,
-                        average_across_timesteps=True,
-                        average_across_batch=True,
-                    )
-                else:
-                    (
-                        log_likelihood,
-                        self.transition_params
-                    ) = tf.contrib.crf.crf_log_likelihood(
-                        self.decoder_logits_train,
-                        self.decoder_targets_train,
-                        self.decoder_inputs_length_train)
-
-                    self.loss = tf.reduce_mean(-log_likelihood)
+                self.loss = seq2seq.sequence_loss(
+                    logits=self.decoder_logits_train,
+                    targets=self.decoder_targets_train,
+                    weights=masks,
+                    average_across_timesteps=True,
+                    average_across_batch=True,
+                )
 
                 # Training summary for the current batch_loss
                 tf.summary.scalar('loss', self.loss)
 
-                # Contruct graphs for minimizing loss
-                # self.init_optimizer()
+            elif self.mode == 'decode':
+                # 预测模式，非训练
 
-            # elif self.mode == 'decode':
-            # 预测模式，非训练
+                start_tokens = tf.fill(
+                    [self.batch_size],
+                    WordSequence.START
+                )
+                end_token = WordSequence.END
 
-            start_tokens = tf.fill(
-                [self.batch_size],
-                WordSequence.START
-            )
-            end_token = WordSequence.END
+                def embed_and_input_proj(inputs):
+                    """输入层的投影层wrapper
+                    """
+                    return input_layer(tf.nn.embedding_lookup(
+                        self.decoder_embeddings,
+                        inputs
+                    ))
 
-            def embed_and_input_proj(inputs):
-                """输入层的投影层wrapper
-                """
-                return input_layer(tf.nn.embedding_lookup(
-                    self.decoder_embeddings,
-                    inputs
+                if not self.use_beamsearch_decode:
+                    # Helper to feed inputs for greedy decoding:
+                    # uses the argmax of the output
+                    decoding_helper = seq2seq.GreedyEmbeddingHelper(
+                        start_tokens=start_tokens,
+                        end_token=end_token,
+                        embedding=embed_and_input_proj
+                    )
+                    # Basic decoder performs greedy decoding at each time step
+                    print("building greedy decoder..")
+                    inference_decoder = seq2seq.BasicDecoder(
+                        cell=self.decoder_cell,
+                        helper=decoding_helper,
+                        initial_state=self.decoder_initial_state,
+                        output_layer=output_layer
+                    )
+                else:
+                    # Beamsearch is used to approximately
+                    # find the most likely translation
+                    print("building beamsearch decoder..")
+                    inference_decoder = BeamSearchDecoder(
+                        cell=self.decoder_cell,
+                        embedding=embed_and_input_proj,
+                        start_tokens=start_tokens,
+                        end_token=end_token,
+                        initial_state=self.decoder_initial_state,
+                        beam_width=self.beam_width,
+                        output_layer=output_layer,
+                    )
+                # For GreedyDecoder, return
+                # decoder_outputs_decode: BasicDecoderOutput instance
+                #     namedtuple(rnn_outputs, sample_id)
+                # decoder_outputs_decode.rnn_output:
+                # if output_time_major=False:
+                #     [batch_size, max_time_step, num_decoder_symbols]
+                # if output_time_major=True
+                #     [max_time_step, batch_size, num_decoder_symbols]
+                # decoder_outputs_decode.sample_id:
+                # if output_time_major=False
+                #     [batch_size, max_time_step], tf.int32
+                # if output_time_major=True
+                #     [max_time_step, batch_size], tf.int32
+
+                # For BeamSearchDecoder, return
+                # decoder_outputs_decode: FinalBeamSearchDecoderOutput instance
+                #     namedtuple(predicted_ids, beam_search_decoder_output)
+                # decoder_outputs_decode.predicted_ids:
+                # if output_time_major=False:
+                #     [batch_size, max_time_step, beam_width]
+                # if output_time_major=True
+                #     [max_time_step, batch_size, beam_width]
+                # decoder_outputs_decode.beam_search_decoder_output:
+                #     BeamSearchDecoderOutput instance
+                #     namedtuple(scores, predicted_ids, parent_ids)
+
+                # 官方文档提到的一个潜在的最大长度选择
+                # maximum_iterations = tf.round(tf.reduce_max(source_sequence_length) * 2)
+                # https://www.tensorflow.org/tutorials/seq2seq
+
+                if self.max_decode_step is not None:
+                    max_decode_step = self.max_decode_step
+                else:
+                    max_decode_step = tf.round(tf.reduce_max(
+                        self.encoder_inputs_length) * 4)
+
+                (
+                    self.decoder_outputs_decode,
+                    self.final_state,
+                    _ # self.decoder_outputs_length_decode
+                ) = (seq2seq.dynamic_decode(
+                    decoder=inference_decoder,
+                    output_time_major=False,
+                    # impute_finished=True,	# error occurs
+                    maximum_iterations=max_decode_step,
+                    parallel_iterations=self.parallel_iterations
                 ))
 
-            if not self.use_beamsearch_decode:
-                # Helper to feed inputs for greedy decoding:
-                # uses the argmax of the output
-                decoding_helper = seq2seq.GreedyEmbeddingHelper(
-                    start_tokens=start_tokens,
-                    end_token=end_token,
-                    embedding=embed_and_input_proj
-                )
-                # Basic decoder performs greedy decoding at each time step
-                print("building greedy decoder..")
-                inference_decoder = seq2seq.BasicDecoder(
-                    cell=self.decoder_cell,
-                    helper=decoding_helper,
-                    initial_state=self.decoder_initial_state,
-                    output_layer=output_layer
-                )
-            else:
-                # Beamsearch is used to approximately
-                # find the most likely translation
-                print("building beamsearch decoder..")
-                inference_decoder = BeamSearchDecoder(
-                    cell=self.decoder_cell,
-                    embedding=embed_and_input_proj,
-                    start_tokens=start_tokens,
-                    end_token=end_token,
-                    initial_state=self.decoder_initial_state,
-                    beam_width=self.beam_width,
-                    output_layer=output_layer,
-                )
-            # For GreedyDecoder, return
-            # decoder_outputs_decode: BasicDecoderOutput instance
-            #     namedtuple(rnn_outputs, sample_id)
-            # decoder_outputs_decode.rnn_output:
-            # if output_time_major=False:
-            #     [batch_size, max_time_step, num_decoder_symbols]
-            # if output_time_major=True
-            #     [max_time_step, batch_size, num_decoder_symbols]
-            # decoder_outputs_decode.sample_id:
-            # if output_time_major=False
-            #     [batch_size, max_time_step], tf.int32
-            # if output_time_major=True
-            #     [max_time_step, batch_size], tf.int32
+                if not self.use_beamsearch_decode:
+                    # decoder_outputs_decode.sample_id:
+                    #     [batch_size, max_time_step]
+                    # Or use argmax to find decoder symbols to emit:
+                    # self.decoder_pred_decode = tf.argmax(
+                    #     self.decoder_outputs_decode.rnn_output,
+                    #     axis=-1, name='decoder_pred_decode')
 
-            # For BeamSearchDecoder, return
-            # decoder_outputs_decode: FinalBeamSearchDecoderOutput instance
-            #     namedtuple(predicted_ids, beam_search_decoder_output)
-            # decoder_outputs_decode.predicted_ids:
-            # if output_time_major=False:
-            #     [batch_size, max_time_step, beam_width]
-            # if output_time_major=True
-            #     [max_time_step, batch_size, beam_width]
-            # decoder_outputs_decode.beam_search_decoder_output:
-            #     BeamSearchDecoderOutput instance
-            #     namedtuple(scores, predicted_ids, parent_ids)
+                    # Here, we use expand_dims to be compatible with
+                    # the result of the beamsearch decoder
+                    # decoder_pred_decode:
+                    #     [batch_size, max_time_step, 1] (output_major=False)
+                    self.decoder_pred_decode = tf.expand_dims(
+                        self.decoder_outputs_decode.sample_id,
+                        -1
+                    )
 
-            # 官方文档提到的一个潜在的最大长度选择
-            # maximum_iterations = tf.round(tf.reduce_max(source_sequence_length) * 2)
-            # https://www.tensorflow.org/tutorials/seq2seq
-
-            if self.max_decode_step is not None:
-                max_decode_step = self.max_decode_step
-            else:
-                max_decode_step = tf.round(tf.reduce_max(
-                    self.encoder_inputs_length) * 4)
-
-            (
-                self.decoder_outputs_decode,
-                self.final_state,
-                _ # self.decoder_outputs_length_decode
-            ) = (seq2seq.dynamic_decode(
-                decoder=inference_decoder,
-                output_time_major=False,
-                # impute_finished=True,	# error occurs
-                maximum_iterations=max_decode_step,
-                parallel_iterations=self.parallel_iterations
-            ))
-
-            if not self.use_beamsearch_decode:
-                # decoder_outputs_decode.sample_id:
-                #     [batch_size, max_time_step]
-                # Or use argmax to find decoder symbols to emit:
-                # self.decoder_pred_decode = tf.argmax(
-                #     self.decoder_outputs_decode.rnn_output,
-                #     axis=-1, name='decoder_pred_decode')
-
-                # Here, we use expand_dims to be compatible with
-                # the result of the beamsearch decoder
-                # decoder_pred_decode:
-                #     [batch_size, max_time_step, 1] (output_major=False)
-                self.decoder_pred_decode = tf.expand_dims(
-                    self.decoder_outputs_decode.sample_id,
-                    -1
-                )
-
-            else:
-                # Use beam search to approximately
-                # find the most likely translation
-                # decoder_pred_decode:
-                # [batch_size, max_time_step, beam_width] (output_major=False)
-                self.decoder_pred_decode = \
-                    self.decoder_outputs_decode.predicted_ids
-
+                else:
+                    # Use beam search to approximately
+                    # find the most likely translation
+                    # decoder_pred_decode:
+                    # [batch_size, max_time_step, beam_width] (output_major=False)
+                    self.decoder_pred_decode = \
+                        self.decoder_outputs_decode.predicted_ids
 
 
     def build_decoder_cell(self):
@@ -855,6 +901,21 @@ class SequenceToSequence(object):
               decoder_inputs, decoder_inputs_length):
         """训练模型"""
 
+        if self.crf:
+            # 如果是crf模式，自动 padding 到 self.max_decode_step
+            # self.max_decode_step 相当于 max_time_step
+            encoder_inputs_crf = []
+            for item in encoder_inputs:
+                encoder_inputs_crf.append(list(item) + \
+                    [WordSequence.PAD] * (self.max_decode_step - len(item)))
+            encoder_inputs = np.array(encoder_inputs_crf)
+
+            decoder_inputs_crf = []
+            for item in decoder_inputs:
+                decoder_inputs_crf.append(list(item) + \
+                    [WordSequence.PAD] * (self.max_decode_step - len(item)))
+            decoder_inputs = np.array(decoder_inputs_crf)
+
         # 输入
         input_feed = self.check_feeds(
             encoder_inputs, encoder_inputs_length,
@@ -862,27 +923,12 @@ class SequenceToSequence(object):
             False
         )
 
-        # 设置dropout
+        # 设置 dropout
         input_feed[self.keep_prob_placeholder.name] = self.keep_prob
 
-
         # 输出
-
-
-        # self.decoder_inputs_embedded
-        # self.decoder_initial_state,
-
-        # print(dir(self.decoder_cell._cells[-1]))
-
-        output_feed = [
-            self.updates,
-            self.loss
-        ]
-
+        output_feed = [self.updates, self.loss]
         _, cost = sess.run(output_feed, input_feed)
-        # print(d)
-        # print(d.shape)
-        # exit(1)
 
         return cost
 
@@ -892,11 +938,27 @@ class SequenceToSequence(object):
         """预测输出"""
 
         # 输入
-        input_feed = self.check_feeds(
-            encoder_inputs, encoder_inputs_length,
-            None, None,
-            True
-        )
+        if not self.crf:
+            input_feed = self.check_feeds(
+                encoder_inputs, encoder_inputs_length,
+                None, None,
+                True
+            )
+        else:
+            # 如果是 crf 模式，就把输入不全到最大长度 self.max_decode_step
+            # 相当于 max_time_step
+            encoder_inputs_crf = []
+            for item in encoder_inputs:
+                encoder_inputs_crf.append(list(item) + \
+                    [WordSequence.PAD] * (self.max_decode_step - len(item)))
+            encoder_inputs = np.array(encoder_inputs_crf)
+
+            input_feed = self.check_feeds(
+                encoder_inputs, encoder_inputs_length,
+                np.zeros(encoder_inputs.shape),
+                np.zeros(encoder_inputs_length.shape),
+                True
+            )
 
         input_feed[self.keep_prob_placeholder.name] = 1.0
 
@@ -919,27 +981,9 @@ class SequenceToSequence(object):
 
             return pred
         else:
-            # crf model
-            if attention:
-
-                pred, transition_params, atten = sess.run([
-                    self.decoder_outputs_decode.rnn_output,
-                    self.transition_params,
-                    self.final_state[1].alignment_history.stack()
-                ], input_feed)
-
-                preds = []
-                for i in range(pred.shape[0]):
-                    item, _ = tf.contrib.crf.viterbi_decode(
-                        pred[i], transition_params)
-                    preds.append(item)
-
-                return np.array(preds), atten
-
-            # else:
-
+            # crf mode
             pred, transition_params = sess.run([
-                self.decoder_outputs_decode.rnn_output,
+                self.decoder_outputs_decode,
                 self.transition_params
             ], input_feed)
 
@@ -947,6 +991,7 @@ class SequenceToSequence(object):
             for i in range(pred.shape[0]):
                 item, _ = tf.contrib.crf.viterbi_decode(
                     pred[i], transition_params)
+                item = item[:encoder_inputs_length[i]]
                 preds.append(item)
 
             return np.array(preds)

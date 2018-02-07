@@ -56,23 +56,18 @@ def test(bidirectional, cell_type, depth, attention_type):
             sess.run(init)
             for epoch in range(1, n_epoch + 1):
                 costs = []
-                bar = tqdm(batch_flow(
+                flow = batch_flow(
                     x_train, y_train, ws_input, ws_target, batch_size
-                ), desc='epoch {}, loss=0.000000'.format(epoch))
-                for x, xl, y, yl in bar:
-
-                    if len(costs) >= steps:
-                        bar.refresh()
-                        bar.close()
-                        bar.refresh()
-                        break
-
+                )
+                bar = tqdm(range(steps),
+                           desc='epoch {}, loss=0.000000'.format(epoch))
+                for _ in bar:
+                    x, xl, y, yl = next(flow)
                     cost = model.train(sess, x, xl, y, yl)
                     costs.append(cost)
-                    bar.set_description('epoch {} loss={:.6f} {}/{}'.format(
+                    bar.set_description('epoch {} loss={:.6f}'.format(
                         epoch,
-                        np.mean(costs),
-                        len(costs), steps
+                        np.mean(costs)
                     ))
 
             model.save(sess, save_path)

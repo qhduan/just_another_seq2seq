@@ -20,14 +20,14 @@ def test(bidirectional, cell_type, depth,
     """测试不同参数在生成的假数据上的运行结果"""
 
     # 获取一些假数据
-    x_data, y_data, ws_input, ws_target = generate(size=10000)
+    x_data, y_data, ws_input, ws_target = generate(size=10000, same_len=True)
 
     # 训练部分
 
-    split = 9900
+    split = 2900
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 2
+    n_epoch = 1
     batch_size = 32
     steps = int(len(x_train) / batch_size) + 1
 
@@ -58,7 +58,9 @@ def test(bidirectional, cell_type, depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
-                parallel_iterations=1 # for test
+                parallel_iterations=1, # for test
+                crf=True,
+                max_decode_step=100
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -91,42 +93,6 @@ def test(bidirectional, cell_type, depth,
         target_vocab_size=len(ws_target),
         batch_size=1,
         mode='decode',
-        beam_width=5,
-        bidirectional=bidirectional,
-        cell_type=cell_type,
-        depth=depth,
-        attention_type=attention_type,
-        use_residual=use_residual,
-        use_dropout=use_dropout,
-        parallel_iterations=1 # for test
-    )
-    init = tf.global_variables_initializer()
-
-    with tf.Session(config=config) as sess:
-        sess.run(init)
-        model_pred.load(sess, save_path)
-
-        bar = batch_flow(x_test, y_test, ws_input, ws_target, 1)
-        t = 0
-        for x, xl, y, yl in bar:
-            pred = model_pred.predict(
-                sess,
-                np.array(x),
-                np.array(xl)
-            )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0, :, 0]))
-            t += 1
-            if t >= 3:
-                break
-
-    tf.reset_default_graph()
-    model_pred = SequenceToSequence(
-        input_vocab_size=len(ws_input),
-        target_vocab_size=len(ws_target),
-        batch_size=1,
-        mode='decode',
         beam_width=1,
         bidirectional=bidirectional,
         cell_type=cell_type,
@@ -134,7 +100,9 @@ def test(bidirectional, cell_type, depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
-        parallel_iterations=1 # for test
+        parallel_iterations=1, # for test
+        crf=True,
+        max_decode_step=100
     )
     init = tf.global_variables_initializer()
 
