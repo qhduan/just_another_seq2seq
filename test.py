@@ -16,7 +16,7 @@ from fake_data import generate
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout):
+         attention_type, use_residual, use_dropout, time_major=False):
     """测试不同参数在生成的假数据上的运行结果"""
 
     # 获取一些假数据
@@ -58,6 +58,7 @@ def test(bidirectional, cell_type, depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
+                time_major=time_major,
                 parallel_iterations=1 # for test
             )
             init = tf.global_variables_initializer()
@@ -98,6 +99,7 @@ def test(bidirectional, cell_type, depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        time_major=time_major,
         parallel_iterations=1 # for test
     )
     init = tf.global_variables_initializer()
@@ -116,7 +118,7 @@ def test(bidirectional, cell_type, depth,
             )
             print(ws_input.inverse_transform(x[0]))
             print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0, :, 0]))
+            print(ws_target.inverse_transform(pred[0]))
             t += 1
             if t >= 3:
                 break
@@ -134,6 +136,7 @@ def test(bidirectional, cell_type, depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        time_major=time_major,
         parallel_iterations=1 # for test
     )
     init = tf.global_variables_initializer()
@@ -171,6 +174,7 @@ def main():
         ('attention_type', ('Luong', 'Bahdanau')),
         ('use_residual', (True, False)),
         ('use_dropout', (True, False)),
+        ('time_major', (True, False))
     ))
 
     loop = itertools.product(*params.values())

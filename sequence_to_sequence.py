@@ -80,6 +80,7 @@ class SequenceToSequence(object):
                  bidirectional=False, # encoder 是否为双向
                  alignment_history=False, # 是否记录alignment历史，用于查看attention热力图
                  crf=False, # 是否使用 crf loss 和 crf inference
+                 time_major=False,
                  seed=0, # 一些层间操作的 seed 设置
                  # dynamic_rnn 和 dynamic_decode 的并行数量
                  # 如果要取得可重复结果，在有dropout的情况下，应该设置为 1，否则结果会不确定
@@ -107,6 +108,7 @@ class SequenceToSequence(object):
         self.crf = crf
         self.seed = seed
         self.parallel_iterations = parallel_iterations
+        self.time_major = time_major
 
         assert dropout >= 0.0 and dropout < 1.0, '0 <= dropout < 1'
 
@@ -324,16 +326,20 @@ class SequenceToSequence(object):
             # encoder_outputs: [batch_size, max_time_step, cell_output_size]
             # encoder_state: [batch_size, cell_output_size]
 
+            inputs = self.encoder_inputs_embedded
+            if self.time_major:
+                inputs = tf.transpose(inputs, (1, 0, 2))
+
             if not self.bidirectional:
                 (
                     self.encoder_outputs,
                     self.encoder_last_state
                 ) = tf.nn.dynamic_rnn(
                     cell=self.encoder_cell,
-                    inputs=self.encoder_inputs_embedded,
+                    inputs=inputs,
                     sequence_length=self.encoder_inputs_length,
                     dtype=tf.float32,
-                    time_major=False,
+                    time_major=self.time_major,
                     parallel_iterations=self.parallel_iterations
                 )
             else:
@@ -344,10 +350,10 @@ class SequenceToSequence(object):
                 ) = tf.nn.bidirectional_dynamic_rnn(
                     cell_fw=self.encoder_cell,
                     cell_bw=self.encoder_cell_bw,
-                    inputs=self.encoder_inputs_embedded,
+                    inputs=inputs,
                     sequence_length=self.encoder_inputs_length,
                     dtype=tf.float32,
-                    time_major=False,
+                    time_major=self.time_major,
                     parallel_iterations=self.parallel_iterations
                 )
 
@@ -481,7 +487,6 @@ class SequenceToSequence(object):
             # Output projection layer to convert cell_outputs to logits
             output_layer = layers.Dense(
                 self.target_vocab_size, name='output_projection')
-            self.output_layer = output_layer
 
             if self.mode == 'train':
                 # decoder_inputs_embedded:
@@ -498,10 +503,14 @@ class SequenceToSequence(object):
 
                 # Helper to feed inputs for training:
                 # read inputs from dense ground truth vectors
+                inputs = self.decoder_inputs_embedded
+                if self.time_major:
+                    inputs = tf.transpose(inputs, (1, 0, 2))
+
                 training_helper = seq2seq.TrainingHelper(
-                    inputs=self.decoder_inputs_embedded,
+                    inputs=inputs,
                     sequence_length=self.decoder_inputs_length_train,
-                    time_major=False,
+                    time_major=self.time_major,
                     name='training_helper'
                 )
 
@@ -532,7 +541,7 @@ class SequenceToSequence(object):
                     _ # self.final_sequence_lengths
                 ) = seq2seq.dynamic_decode(
                     decoder=training_decoder,
-                    output_time_major=False,
+                    output_time_major=self.time_major,
                     impute_finished=True,
                     maximum_iterations=max_decoder_length,
                     parallel_iterations=self.parallel_iterations
@@ -563,8 +572,12 @@ class SequenceToSequence(object):
                 # Internally calls
                 # 'nn_ops.sparse_softmax_cross_entropy_with_logits' by default
 
+                decoder_logits_train = self.decoder_logits_train
+                if self.time_major:
+                    decoder_logits_train = tf.transpose(decoder_logits_train, (1, 0, 2))
+
                 self.loss = seq2seq.sequence_loss(
-                    logits=self.decoder_logits_train,
+                    logits=decoder_logits_train,
                     targets=self.decoder_targets_train,
                     weights=masks,
                     average_across_timesteps=True,
@@ -662,7 +675,7 @@ class SequenceToSequence(object):
                     _ # self.decoder_outputs_length_decode
                 ) = (seq2seq.dynamic_decode(
                     decoder=inference_decoder,
-                    output_time_major=False,
+                    output_time_major=self.time_major,
                     # impute_finished=True,	# error occurs
                     maximum_iterations=max_decode_step,
                     parallel_iterations=self.parallel_iterations
@@ -689,6 +702,10 @@ class SequenceToSequence(object):
                     dod = self.decoder_outputs_decode
                     self.decoder_pred_decode = dod.sample_id
 
+                    if self.time_major:
+                        self.decoder_pred_decode = tf.transpose(
+                            self.decoder_pred_decode, (1, 0))
+
                 else:
                     # Use beam search to approximately
                     # find the most likely translation
@@ -696,6 +713,11 @@ class SequenceToSequence(object):
                     # [batch_size, max_time_step, beam_width] (output_major=False)
                     self.decoder_pred_decode = \
                         self.decoder_outputs_decode.predicted_ids
+
+                    if self.time_major:
+                        self.decoder_pred_decode = tf.transpose(
+                            self.decoder_pred_decode, (1, 0, 2))
+
                     self.decoder_pred_decode = tf.transpose(
                         self.decoder_pred_decode,
                         perm=[0, 2, 1])
@@ -710,19 +732,32 @@ class SequenceToSequence(object):
         encoder_last_state = self.encoder_last_state
         encoder_inputs_length = self.encoder_inputs_length
 
+        if self.time_major:
+            encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
+
         # To use BeamSearchDecoder
         # encoder_outputs, encoder_last_state, encoder_inputs_length
         # needs to be tiled so that:
         # [batch_size, .., ..] -> [batch_size x beam_width, .., ..]
         if self.use_beamsearch_decode:
-            # print("use beamsearch decoding..")
+
+            # if self.time_major:
+            #     encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
+            #     print('encoder_outputs', encoder_outputs.shape)
+            #     print('encoder_inputs_length', encoder_inputs_length.shape)
+
             encoder_outputs = seq2seq.tile_batch(
-                self.encoder_outputs, multiplier=self.beam_width)
+                encoder_outputs, multiplier=self.beam_width)
             encoder_last_state = nest.map_structure(
                 lambda s: seq2seq.tile_batch(s, self.beam_width),
                 self.encoder_last_state)
             encoder_inputs_length = seq2seq.tile_batch(
                 self.encoder_inputs_length, multiplier=self.beam_width)
+
+            # if self.time_major:
+            #     print('encoder_outputs', encoder_outputs.shape)
+            #     print('encoder_inputs_length', encoder_inputs_length.shape)
+            #     # encoder_inputs_length = tf.transpose(encoder_inputs_length)
 
         # 计算解码器的隐藏神经元数，如果编码器是bidirectional的
         # 那么解码器的一些隐藏神经元应该乘2

@@ -175,11 +175,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-
-    test(
-        True, 'lstm', 2,
-        'Bahdanau', True, True
-    )
+    test(True, 'gru', 1, 'Bahdanau', False, True)
 
 
 if __name__ == '__main__':
