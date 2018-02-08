@@ -31,7 +31,7 @@ def test(bidirectional, cell_type, depth,
     split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 1
+    n_epoch = 10
     batch_size = 64
     steps = int(len(x_train) / batch_size) + 1
 
@@ -55,14 +55,16 @@ def test(bidirectional, cell_type, depth,
                 input_vocab_size=len(ws_input),
                 target_vocab_size=len(ws_target),
                 batch_size=batch_size,
-                learning_rate=0.001,
+                learning_rate=0.01,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
-                parallel_iterations=64 # for test
+                parallel_iterations=64,
+                hidden_units=512,
+                optimizer='momentum'
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -95,13 +97,14 @@ def test(bidirectional, cell_type, depth,
         target_vocab_size=len(ws_target),
         batch_size=1,
         mode='decode',
-        beam_width=5,
+        beam_width=12,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        hidden_units=512,
         parallel_iterations=1 # for test
     )
     init = tf.global_variables_initializer()
@@ -120,7 +123,7 @@ def test(bidirectional, cell_type, depth,
             )
             print(ws_input.inverse_transform(x[0]))
             print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0, :, 0]))
+            print(ws_target.inverse_transform(pred[0]))
             t += 1
             if t >= 3:
                 break
@@ -138,6 +141,7 @@ def test(bidirectional, cell_type, depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        hidden_units=512,
         parallel_iterations=1 # for test
     )
     init = tf.global_variables_initializer()
@@ -170,7 +174,7 @@ def main():
 
     test(
         True, 'lstm', 2,
-        'Bahdanau', True, True
+        'Bahdanau', False, True
     )
 
 

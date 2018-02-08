@@ -8,6 +8,7 @@ import sys
 import pickle
 import xml.etree.ElementTree as ET
 import nltk
+import jieba
 from tqdm import tqdm
 
 sys.path.append('..')
@@ -54,13 +55,23 @@ def main():
         text = text.replace('！', '!')
         text = re.sub(r'[^\u4e00-\u9fff,\.\?\!…《》]', '', text)
         text = text.strip()
-        text = list(text)
+        text = jieba.lcut(text)
         return text
 
     y_data = [
         zh_tokenize(y.lower())
         for y in tqdm(y_data)
     ]
+
+    data = list(zip(x_data, y_data))
+    data = [(x, y) for x, y in data if len(x) < 10 and len(y) < 10]
+
+    x_data, y_data = [x[0] for x in data], [x[1] for x in data]
+
+    print(x_data[:10])
+    print(y_data[:10])
+
+    print(len(x_data), len(y_data))
 
     print('fit word_sequence')
 

@@ -108,6 +108,8 @@ class SequenceToSequence(object):
         self.seed = seed
         self.parallel_iterations = parallel_iterations
 
+        assert dropout >= 0.0 and dropout < 1.0, '0 <= dropout < 1'
+
         assert attention_type.lower() in ('bahdanau', 'luong'), \
             '''attention_type must be "bahdanau" or "luong" not "%s"
             ''' % attention_type
@@ -155,6 +157,10 @@ class SequenceToSequence(object):
             (not self.use_beamsearch_decode and self.crf) or \
             (not self.use_beamsearch_decode and not self.crf), \
             'beamsearch和crf不能同时打开'
+
+        assert self.optimizer.lower() in \
+            ('adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'), \
+            'optimizer must be one of adadelta, adam, rmsprop, momentum, sgd'
 
         self.build_model()
 
@@ -594,7 +600,7 @@ class SequenceToSequence(object):
                         embedding=embed_and_input_proj
                     )
                     # Basic decoder performs greedy decoding at each time step
-                    print("building greedy decoder..")
+                    # print("building greedy decoder..")
                     inference_decoder = seq2seq.BasicDecoder(
                         cell=self.decoder_cell,
                         helper=decoding_helper,
@@ -604,7 +610,7 @@ class SequenceToSequence(object):
                 else:
                     # Beamsearch is used to approximately
                     # find the most likely translation
-                    print("building beamsearch decoder..")
+                    # print("building beamsearch decoder..")
                     inference_decoder = BeamSearchDecoder(
                         cell=self.decoder_cell,
                         embedding=embed_and_input_proj,
@@ -674,10 +680,14 @@ class SequenceToSequence(object):
                     # the result of the beamsearch decoder
                     # decoder_pred_decode:
                     #     [batch_size, max_time_step, 1] (output_major=False)
-                    self.decoder_pred_decode = tf.expand_dims(
-                        self.decoder_outputs_decode.sample_id,
-                        -1
-                    )
+
+                    # self.decoder_pred_decode = tf.expand_dims(
+                    #     self.decoder_outputs_decode.sample_id,
+                    #     -1
+                    # )
+
+                    dod = self.decoder_outputs_decode
+                    self.decoder_pred_decode = dod.sample_id
 
                 else:
                     # Use beam search to approximately
@@ -686,6 +696,11 @@ class SequenceToSequence(object):
                     # [batch_size, max_time_step, beam_width] (output_major=False)
                     self.decoder_pred_decode = \
                         self.decoder_outputs_decode.predicted_ids
+                    self.decoder_pred_decode = tf.transpose(
+                        self.decoder_pred_decode,
+                        perm=[0, 2, 1])
+                    dod = self.decoder_outputs_decode
+                    self.beam_prob = dod.beam_search_decoder_output.scores
 
 
     def build_decoder_cell(self):
@@ -870,6 +885,8 @@ class SequenceToSequence(object):
         """
         # print("setting optimizer..")
         # Gradients and SGD update operation for training the model
+        # self.optimizer.lower()
+        # 'adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'
         trainable_params = tf.trainable_variables()
         if self.optimizer.lower() == 'adadelta':
             self.opt = tf.train.AdadeltaOptimizer(
@@ -880,7 +897,10 @@ class SequenceToSequence(object):
         elif self.optimizer.lower() == 'rmsprop':
             self.opt = tf.train.RMSPropOptimizer(
                 learning_rate=self.learning_rate)
-        else:
+        elif self.optimizer.lower() == 'momentum':
+            self.opt = tf.train.MomentumOptimizer(
+                learning_rate=self.learning_rate, momentum=0.9)
+        elif self.optimizer.lower() == 'sgd':
             self.opt = tf.train.GradientDescentOptimizer(
                 learning_rate=self.learning_rate)
 
@@ -966,6 +986,15 @@ class SequenceToSequence(object):
             # not crf mode
             if attention:
 
+                if self.use_beamsearch_decode:
+
+                    pred, atten = sess.run([
+                        self.decoder_pred_decode,
+                        self.final_state[1].alignment_history.stack()
+                    ], input_feed)
+
+                    return predpred[:, -1], atten
+
                 pred, atten = sess.run([
                     self.decoder_pred_decode,
                     self.final_state[1].alignment_history.stack()
@@ -974,6 +1003,13 @@ class SequenceToSequence(object):
                 return pred, atten
 
             # else:
+
+            if self.use_beamsearch_decode:
+                pred, = sess.run([
+                    self.decoder_pred_decode
+                ], input_feed)
+
+                return pred[:, -1]
 
             pred, = sess.run([
                 self.decoder_pred_decode
