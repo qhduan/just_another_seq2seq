@@ -110,6 +110,8 @@ class SequenceToSequence(object):
         self.parallel_iterations = parallel_iterations
         self.time_major = time_major
 
+        assert mode in ('train', 'decode'), 'mode must be train or decode'
+
         assert dropout >= 0.0 and dropout < 1.0, '0 <= dropout < 1'
 
         assert attention_type.lower() in ('bahdanau', 'luong'), \
@@ -392,6 +394,116 @@ class SequenceToSequence(object):
                     ])
 
 
+
+    def build_decoder_cell(self):
+        """构建解码器cell"""
+
+        encoder_outputs = self.encoder_outputs
+        encoder_last_state = self.encoder_last_state
+        encoder_inputs_length = self.encoder_inputs_length
+
+        if self.time_major:
+            encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
+
+        # To use BeamSearchDecoder
+        # encoder_outputs, encoder_last_state, encoder_inputs_length
+        # needs to be tiled so that:
+        # [batch_size, .., ..] -> [batch_size x beam_width, .., ..]
+        if self.use_beamsearch_decode:
+
+            # if self.time_major:
+            #     encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
+            #     print('encoder_outputs', encoder_outputs.shape)
+            #     print('encoder_inputs_length', encoder_inputs_length.shape)
+
+            encoder_outputs = seq2seq.tile_batch(
+                encoder_outputs, multiplier=self.beam_width)
+            encoder_last_state = nest.map_structure(
+                lambda s: seq2seq.tile_batch(s, self.beam_width),
+                self.encoder_last_state)
+            encoder_inputs_length = seq2seq.tile_batch(
+                self.encoder_inputs_length, multiplier=self.beam_width)
+
+            # if self.time_major:
+            #     print('encoder_outputs', encoder_outputs.shape)
+            #     print('encoder_inputs_length', encoder_inputs_length.shape)
+            #     # encoder_inputs_length = tf.transpose(encoder_inputs_length)
+
+        # 计算解码器的隐藏神经元数，如果编码器是bidirectional的
+        # 那么解码器的一些隐藏神经元应该乘2
+        num_units = self.hidden_units
+        if self.bidirectional:
+            num_units *= 2
+
+        # Building attention mechanism: Default Bahdanau
+        # 'Bahdanau' style attention: https://arxiv.org/abs/1409.0473
+        self.attention_mechanism = BahdanauAttention(
+            num_units=num_units,
+            memory=encoder_outputs,
+            memory_sequence_length=encoder_inputs_length
+        )
+        # 'Luong' style attention: https://arxiv.org/abs/1508.04025
+        if self.attention_type.lower() == 'luong':
+            self.attention_mechanism = LuongAttention(
+                num_units=num_units,
+                memory=encoder_outputs,
+                memory_sequence_length=encoder_inputs_length
+            )
+
+        # Building decoder_cell
+        self.decoder_cell_list = [
+            self.build_single_cell(
+                num_units,
+                use_residual=False
+            )
+            for i in range(self.depth)
+        ]
+
+        decoder_initial_state = encoder_last_state
+
+        def attn_decoder_input_fn(inputs, attention):
+            """根据attn_input_feeding属性来判断是否使用一个投影层？？？
+            这个不是特别明白
+            """
+            if not self.attn_input_feeding:
+                return inputs
+
+            # Essential when use_residual=True
+            input_layer = layers.Dense(self.hidden_units, dtype=tf.float32,
+                                       name='attn_input_feeding')
+            return input_layer(array_ops.concat([inputs, attention], -1))
+
+        # AttentionWrapper wraps RNNCell with the attention_mechanism
+        # Note: We implement Attention mechanism only on the top decoder layer
+        self.decoder_cell_list[-1] = AttentionWrapper(
+            cell=self.decoder_cell_list[-1],
+            attention_mechanism=self.attention_mechanism,
+            # attention_layer_size=self.hidden_units,
+            attention_layer_size=num_units,
+            cell_input_fn=attn_decoder_input_fn,
+            initial_cell_state=encoder_last_state[-1],
+            alignment_history=self.alignment_history,
+            name='Attention_Wrapper')
+
+        # To be compatible with AttentionWrapper, the encoder last state
+        # of the top layer should be converted
+        # into the AttentionWrapperState form
+        # We can easily do this by calling AttentionWrapper.zero_state
+
+        # Also if beamsearch decoding is used,
+        # the batch_size argument in .zero_state
+        # should be ${decoder_beam_width} times to the origianl batch_size
+        batch_size = self.batch_size if not self.use_beamsearch_decode \
+                     else self.batch_size * self.beam_width
+        initial_state = [state for state in encoder_last_state]
+
+        initial_state[-1] = self.decoder_cell_list[-1].zero_state(
+            batch_size=batch_size, dtype=tf.float32)
+        decoder_initial_state = tuple(initial_state)
+
+        return MultiRNNCell(self.decoder_cell_list), decoder_initial_state
+
+
     def build_decoder_crf(self):
         """构建crf解码器
         """
@@ -574,7 +686,8 @@ class SequenceToSequence(object):
 
                 decoder_logits_train = self.decoder_logits_train
                 if self.time_major:
-                    decoder_logits_train = tf.transpose(decoder_logits_train, (1, 0, 2))
+                    decoder_logits_train = tf.transpose(decoder_logits_train,
+                                                        (1, 0, 2))
 
                 self.loss = seq2seq.sequence_loss(
                     logits=decoder_logits_train,
@@ -723,115 +836,6 @@ class SequenceToSequence(object):
                         perm=[0, 2, 1])
                     dod = self.decoder_outputs_decode
                     self.beam_prob = dod.beam_search_decoder_output.scores
-
-
-    def build_decoder_cell(self):
-        """构建解码器cell"""
-
-        encoder_outputs = self.encoder_outputs
-        encoder_last_state = self.encoder_last_state
-        encoder_inputs_length = self.encoder_inputs_length
-
-        if self.time_major:
-            encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
-
-        # To use BeamSearchDecoder
-        # encoder_outputs, encoder_last_state, encoder_inputs_length
-        # needs to be tiled so that:
-        # [batch_size, .., ..] -> [batch_size x beam_width, .., ..]
-        if self.use_beamsearch_decode:
-
-            # if self.time_major:
-            #     encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
-            #     print('encoder_outputs', encoder_outputs.shape)
-            #     print('encoder_inputs_length', encoder_inputs_length.shape)
-
-            encoder_outputs = seq2seq.tile_batch(
-                encoder_outputs, multiplier=self.beam_width)
-            encoder_last_state = nest.map_structure(
-                lambda s: seq2seq.tile_batch(s, self.beam_width),
-                self.encoder_last_state)
-            encoder_inputs_length = seq2seq.tile_batch(
-                self.encoder_inputs_length, multiplier=self.beam_width)
-
-            # if self.time_major:
-            #     print('encoder_outputs', encoder_outputs.shape)
-            #     print('encoder_inputs_length', encoder_inputs_length.shape)
-            #     # encoder_inputs_length = tf.transpose(encoder_inputs_length)
-
-        # 计算解码器的隐藏神经元数，如果编码器是bidirectional的
-        # 那么解码器的一些隐藏神经元应该乘2
-        num_units = self.hidden_units
-        if self.bidirectional:
-            num_units *= 2
-
-        # Building attention mechanism: Default Bahdanau
-        # 'Bahdanau' style attention: https://arxiv.org/abs/1409.0473
-        self.attention_mechanism = BahdanauAttention(
-            num_units=num_units,
-            memory=encoder_outputs,
-            memory_sequence_length=encoder_inputs_length
-        )
-        # 'Luong' style attention: https://arxiv.org/abs/1508.04025
-        if self.attention_type.lower() == 'luong':
-            self.attention_mechanism = LuongAttention(
-                num_units=num_units,
-                memory=encoder_outputs,
-                memory_sequence_length=encoder_inputs_length
-            )
-
-        # Building decoder_cell
-        self.decoder_cell_list = [
-            self.build_single_cell(
-                num_units,
-                use_residual=False
-            )
-            for i in range(self.depth)
-        ]
-
-        decoder_initial_state = encoder_last_state
-
-        def attn_decoder_input_fn(inputs, attention):
-            """根据attn_input_feeding属性来判断是否使用一个投影层？？？
-            这个不是特别明白
-            """
-            if not self.attn_input_feeding:
-                return inputs
-
-            # Essential when use_residual=True
-            input_layer = layers.Dense(self.hidden_units, dtype=tf.float32,
-                                       name='attn_input_feeding')
-            return input_layer(array_ops.concat([inputs, attention], -1))
-
-        # AttentionWrapper wraps RNNCell with the attention_mechanism
-        # Note: We implement Attention mechanism only on the top decoder layer
-        self.decoder_cell_list[-1] = AttentionWrapper(
-            cell=self.decoder_cell_list[-1],
-            attention_mechanism=self.attention_mechanism,
-            # attention_layer_size=self.hidden_units,
-            attention_layer_size=num_units,
-            cell_input_fn=attn_decoder_input_fn,
-            initial_cell_state=encoder_last_state[-1],
-            alignment_history=self.alignment_history,
-            name='Attention_Wrapper')
-
-        # To be compatible with AttentionWrapper, the encoder last state
-        # of the top layer should be converted
-        # into the AttentionWrapperState form
-        # We can easily do this by calling AttentionWrapper.zero_state
-
-        # Also if beamsearch decoding is used,
-        # the batch_size argument in .zero_state
-        # should be ${decoder_beam_width} times to the origianl batch_size
-        batch_size = self.batch_size if not self.use_beamsearch_decode \
-                     else self.batch_size * self.beam_width
-        initial_state = [state for state in encoder_last_state]
-
-        initial_state[-1] = self.decoder_cell_list[-1].zero_state(
-            batch_size=batch_size, dtype=tf.float32)
-        decoder_initial_state = tuple(initial_state)
-
-        return MultiRNNCell(self.decoder_cell_list), decoder_initial_state
 
 
     def save(self, sess, save_path='model/'):
@@ -1000,7 +1004,7 @@ class SequenceToSequence(object):
                 True
             )
         else:
-            # 如果是 crf 模式，就把输入不全到最大长度 self.max_decode_step
+            # 如果是 crf 模式，就把输入补全到最大长度 self.max_decode_step
             # 相当于 max_time_step
             encoder_inputs_crf = []
             for item in encoder_inputs:
