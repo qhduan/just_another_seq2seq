@@ -1174,3 +1174,66 @@ def batch_flow(x_data, y_data, ws_q, ws_a, batch_size):
             np.array(y_batch),
             np.array(ylen_batch)
         )
+
+
+
+def batch_flow_bucket(x_data, y_data, ws_q, ws_a, batch_size, n_bucket=4):
+    """从数据中随机 batch_size 个的数据，然后 yield 出去
+    """
+
+    # QHDuan
+    # 一个 trick
+    # 相当于把不同数据的长度分组，算是一种 bucket
+    # 这里弄的比较简单，复杂一点的是把“类似长度”的输出聚合到一起
+    # 例如输出句子长度1~3的一组，4~6的一组
+    # 每个batch不会出现不同组的长度
+    # 如果不这样做对于某些数据很可能完全算不出好结果
+    sizes = sorted(list(set([len(y) for y in y_data])))
+    buckets = (np.linspace(0, 1, n_bucket + 1) * len(sizes)).astype(int)
+    print('buckets', buckets)
+
+    sizes_data = {}
+    for i, k in enumerate(buckets):
+        if i > 0:
+            low = buckets[i - 1]
+            v = [(x, y) for x, y in zip(x_data, y_data)
+                 if len(y) > low and len(y) < k]
+            sizes_data[k] = v
+            while len(sizes_data[k]) < batch_size:
+                sizes_data[k] = sizes_data[k] + sizes_data[k]
+    sizes = sorted(list(sizes_data.keys()))
+    # print('sizes', buckets)
+
+    assert tuple(buckets[1:]) == tuple(sizes), \
+        '{} != {}'.format(buckets, sizes)
+    assert len(sizes) == n_bucket
+
+    while True:
+
+        size = random.choice(sizes)
+        data_batch = random.sample(sizes_data[size], batch_size)
+
+        q_max = max([len(x[0]) for x in data_batch])
+        a_max = max([len(x[1]) for x in data_batch])
+        data_batch = sorted(data_batch, key=lambda x: len(x[1]), reverse=True)
+
+        x_batch = []
+        y_batch = []
+        xlen_batch = []
+        ylen_batch = []
+
+        for q, a in data_batch:
+            x, xl, y, yl = transform_data(
+                q, a, ws_q, ws_a, q_max, a_max
+            )
+            x_batch.append(x)
+            xlen_batch.append(xl)
+            y_batch.append(y)
+            ylen_batch.append(yl)
+
+        yield (
+            np.array(x_batch),
+            np.array(xlen_batch),
+            np.array(y_batch),
+            np.array(ylen_batch)
+        )

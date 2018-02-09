@@ -70,7 +70,6 @@ def main():
 
     data = list(zip(x_data, y_data))
     data = [(x, y) for x, y in data if len(x) < 15 and len(y) < 15]
-
     x_data, y_data = [x[0] for x in data], [x[1] for x in data]
 
     print(x_data[:10])

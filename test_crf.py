@@ -24,7 +24,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
 
-    split = 2900
+    split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
     n_epoch = 1
@@ -58,6 +58,8 @@ def test(bidirectional, cell_type, depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
+                hidden_units=64,
+                embedding_size=64,
                 parallel_iterations=1, # for test
                 crf=True,
                 max_decode_step=100
@@ -93,13 +95,15 @@ def test(bidirectional, cell_type, depth,
         target_vocab_size=len(ws_target),
         batch_size=1,
         mode='decode',
-        beam_width=1,
+        beam_width=0,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        hidden_units=64,
+        embedding_size=64,
         parallel_iterations=1, # for test
         crf=True,
         max_decode_step=100
