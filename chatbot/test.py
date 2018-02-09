@@ -6,7 +6,6 @@ import sys
 import random
 import pickle
 
-import nltk
 import numpy as np
 import tensorflow as tf
 
@@ -32,7 +31,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss_chatbot/'
+    save_path = '/tmp/s2ss_chatbot.ckpt'
 
     # 测试部分
     tf.reset_default_graph()

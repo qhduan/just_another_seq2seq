@@ -35,7 +35,7 @@ def test(bidirectional, cell_type, depth, attention_type):
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss/'
+    save_path = '/tmp/s2ss_atten.ckpt'
 
     with tf.Graph().as_default():
 

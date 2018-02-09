@@ -53,7 +53,6 @@ from word_sequence import WordSequence
 VOCAB_SIZE_THRESHOLD_CPU = 50000
 
 
-
 def _get_available_gpus():
     """获取当前GPU数量"""
     local_device_protos = device_lib.list_local_devices()
@@ -77,38 +76,81 @@ class SequenceToSequence(object):
     """
 
     def __init__(self,
-                 input_vocab_size, # 输入词表大小
-                 target_vocab_size, # 输出词表大小
+                 input_vocab_size,
+                 target_vocab_size,
                  batch_size=32,
-                 embedding_size=128, # 输入输出表embedding的维度
-                 mode='train', # or decode
-                 # RNN模型的中间层大小，encoder和decoder层相同
-                 # 如果encoder层是bidirectional的话，decoder层是双倍大小
+                 embedding_size=128,
+                 mode='train',
                  hidden_units=256,
-                 depth=1, #
+                 depth=1,
                  attn_input_feeding=False,
-                 # beam_width是beamsearch的超参，用于解码，如果大于0则使用beamsearch
                  beam_width=0,
-                 cell_type='lstm', # or gru
-                 dropout=0.2, # 输入输出层的dropout
-                 use_dropout=False, # 是否使用dropout
-                 use_residual=False, # 是否使用residual
+                 cell_type='lstm',
+                 dropout=0.2,
+                 use_dropout=False,
+                 use_residual=False,
                  optimizer='adam',
                  learning_rate=0.001,
                  max_gradient_norm=5.0,
-                 # 最大的解码长度，可以是很大的整数，默认是None
-                 # None的情况下默认是encoder输入最大长度的 4 倍
                  max_decode_step=None,
-                 attention_type='Bahdanau', # or Luong 不同的 attention 类型
-                 bidirectional=False, # encoder 是否为双向
-                 alignment_history=False, # 是否记录alignment历史，用于查看attention热力图
-                 crf=False, # 是否使用 crf loss 和 crf inference
+                 attention_type='Bahdanau',
+                 bidirectional=False,
+                 alignment_history=False,
+                 crf=False,
                  time_major=False,
-                 seed=0, # 一些层间操作的 seed 设置
-                 # dynamic_rnn 和 dynamic_decode 的并行数量
-                 # 如果要取得可重复结果，在有dropout的情况下，应该设置为 1，否则结果会不确定
+                 seed=0,
                  parallel_iterations=32):
         """保存参数变量，开始构建整个模型
+        Args:
+            input_vocab_size: 输入词表大小
+            target_vocab_size: 输出词表大小
+            batch_size: 数据batch的大小
+            embedding_size, 输入词表与输出词表embedding的维度
+            mode: 取值为 train 或者 decode，训练模式或者预测模式
+            hidden_units:
+                RNN模型的中间层大小，encoder和decoder层相同
+                如果encoder层是bidirectional的话，decoder层是双倍大小
+            depth: encoder和decoder的rnn层数
+            attn_input_feeding: 输入给 attention 层的时候，是否使用一个投影层
+            beam_width:
+                beam_width是beamsearch的超参，用于解码
+                如果大于0则使用beamsearch，小于等于0则不使用
+            cell_type: rnn神经元类型，lstm 或者 gru
+            dropout: dropout比例，取值 [0, 1)
+            use_dropout: 是否使用dropout
+            use_residual:# 是否使用residual
+            optimizer: 优化方法， adam, adadelta, sgd, rmsprop, momentum
+            learning_rate: 学习率
+            max_gradient_norm: 梯度正则剪裁的系数
+            max_decode_step:
+                最大的解码长度，可以是很大的整数，默认是None
+                None的情况下默认是encoder输入最大长度的 4 倍
+            attention_type: 'Bahdanau' or 'Luong' 不同的 attention 类型
+            bidirectional: encoder 是否为双向
+            alignment_history:
+                是否记录alignment历史，用于查看attention热力图
+                详情可以参考 test_atten.py 文件中显示热力图的代码
+            crf:
+                是否使用 crf loss 和 crf inference
+                如果使用 crf 会代替一般 seq2seq 的 decoder 部分
+                具体可以参考 build_decoder_crf 函数
+            time_major:
+                是否在“计算过程”中使用时间为主的批量数据
+                注意，改变这个参数并不要求改变输入数据的格式
+                输入数据的格式为 [batch_size, time_step] 是一个二维矩阵
+                time_step是句子长度
+                经过 embedding 之后，数据会变为
+                [batch_size, time_step, embedding_size]
+                这是一个三维矩阵（或者三维张量Tensor）
+                这样的数据格式是 time_major=False 的
+                如果设置 time_major=True 的话，在部分计算的时候，会把矩阵转置为
+                [time_step, batch_size, embedding_size]
+                也就是 time_step 是第一维，所以叫 time_major
+                TensorFlow官方文档认为time_major=True会比较快
+            seed: 一些层间操作的随机数 seed 设置
+            parallel_iterations:
+                dynamic_rnn 和 dynamic_decode 的并行数量
+                如果要取得可重复结果，在有dropout的情况下，应该设置为 1，否则结果会不确定
         """
 
         self.input_vocab_size = input_vocab_size
@@ -194,12 +236,17 @@ class SequenceToSequence(object):
 
     def build_model(self):
         """构建整个模型
+        分别构建
+        编码器（encoder）
+        解码器（decoder）
+        优化器（只在训练时构建，optimizer）
         """
         self.init_placeholders()
         self.build_encoder()
         if not self.crf:
             self.build_decoder()
         else:
+            # 如果在 crf 模式下，则用 一个简单投影层 代替 seq2seq 的一般RNN解码器
             self.build_decoder_crf()
 
         if self.mode == 'train':
@@ -210,8 +257,8 @@ class SequenceToSequence(object):
         """初始化训练、预测所需的变量
         """
 
-        # 编码器输入，shape=(batch_size, max_len)
-        # 有 batch_size 句话，每句话是最大长度为 max_len 的 index 表示
+        # 编码器输入，shape=(batch_size, time_step)
+        # 有 batch_size 句话，每句话是最大长度为 time_step 的 index 表示
         self.encoder_inputs = tf.placeholder(
             dtype=tf.int32,
             shape=(self.batch_size, None),
@@ -236,7 +283,7 @@ class SequenceToSequence(object):
         if self.mode == 'train' or self.crf:
             # 训练模式
 
-            # 解码器输入，shape=(batch_size, max_len)
+            # 解码器输入，shape=(batch_size, time_step)
             self.decoder_inputs = tf.placeholder(
                 dtype=tf.int32,
                 shape=(self.batch_size, None),
@@ -266,6 +313,8 @@ class SequenceToSequence(object):
                 self.decoder_inputs
             ], axis=1)
 
+            # 这个变量用来计算一个mask，用来对loss函数的反向传播进行修正
+            # 这里需要 + 1，因为会自动给训练结果增加 end_token
             self.decoder_inputs_length_train = self.decoder_inputs_length + 1
 
             # 实际训练的解码器目标，实际上是 decoder_inputs + end_token
@@ -277,6 +326,9 @@ class SequenceToSequence(object):
 
     def build_single_cell(self, n_hidden, use_residual):
         """构建一个单独的rnn cell
+        Args:
+            n_hidden: 隐藏层神经元数量
+            use_residual: 是否使用residual wrapper
         """
         cell_type = LSTMCell
         if self.cell_type.lower() == 'gru':
@@ -296,8 +348,8 @@ class SequenceToSequence(object):
         return cell
 
     def build_encoder_cell(self):
-        """构建一个单独的编码器cell"""
-
+        """构建一个单独的编码器cell
+        """
         return MultiRNNCell([
             self.build_single_cell(
                 self.hidden_units,
@@ -308,8 +360,9 @@ class SequenceToSequence(object):
 
 
     def build_encoder(self):
-        """构建编码器"""
-        print("构建编码器")
+        """构建编码器
+        """
+        # print("构建编码器")
         with tf.variable_scope('encoder'):
             # 构建 encoder_cell
             self.encoder_cell = self.build_encoder_cell()
@@ -455,7 +508,7 @@ class SequenceToSequence(object):
             #     print('encoder_inputs_length', encoder_inputs_length.shape)
             #     # encoder_inputs_length = tf.transpose(encoder_inputs_length)
 
-        # 计算解码器的隐藏神经元数，如果编码器是bidirectional的
+        # 计算解码器的隐藏神经元数，如果编码器是 bidirectional 的
         # 那么解码器的一些隐藏神经元应该乘2
         num_units = self.hidden_units
         if self.bidirectional:
@@ -488,8 +541,7 @@ class SequenceToSequence(object):
         decoder_initial_state = encoder_last_state
 
         def attn_decoder_input_fn(inputs, attention):
-            """根据attn_input_feeding属性来判断是否使用一个投影层？？？
-            这个不是特别明白
+            """根据attn_input_feeding属性来判断是否在attention计算前进行一次投影计算
             """
             if not self.attn_input_feeding:
                 return inputs
@@ -519,6 +571,7 @@ class SequenceToSequence(object):
         # Also if beamsearch decoding is used,
         # the batch_size argument in .zero_state
         # should be ${decoder_beam_width} times to the origianl batch_size
+        # 如果使用了 beamsearch 那么输入应该是 beam_width 倍于 batch_size 的
         batch_size = self.batch_size if not self.use_beamsearch_decode \
                      else self.batch_size * self.beam_width
         initial_state = [state for state in encoder_last_state]
@@ -553,14 +606,18 @@ class SequenceToSequence(object):
                 -sqrt3, sqrt3, dtype=tf.float32
             )
 
+            # 把encoder的结果进行一次线性变换所需要的变量
             crf_w = tf.get_variable('crf_w',
                                     [hidden_units, self.target_vocab_size],
                                     initializer=initializer)
             crf_b = tf.get_variable('crf_b', [self.target_vocab_size],
                                     initializer=tf.zeros_initializer())
 
+            outputs = tf.matmul(encoder_outputs, crf_w) + crf_b
+
+            # crf 计算必须固定住max_decode_step
             self.decoder_outputs_decode = tf.reshape(
-                tf.matmul(encoder_outputs, crf_w) + crf_b,
+                outputs,
                 shape=[self.batch_size,
                        self.max_decode_step,
                        self.target_vocab_size])
@@ -601,16 +658,6 @@ class SequenceToSequence(object):
                     dtype=tf.float32
                 )
 
-            # QHDuan:
-            # 输入输出投影本质是一个trick，减少weights数量，增加计算速度
-            # 以输出为例
-            # 例如如果输出层是100,000维度
-            # （英文字典很可能到10万维，例如输出可能是softmax）
-            # 中间隐藏层是4096维度的 RNN
-            # 那么全连接就要 4096 * 100,000 = 409,600,000 维度，四亿
-            # 如果增加一个隐藏层，变成 4096 * 512 + 512 * 100,000 = 53,297,152
-            # 那就只有五千多万，变成了原来的八分之一
-            # 相关论文
             # On Using Very Large Target Vocabulary
             # for Neural Machine Translation
             # https://arxiv.org/pdf/1412.2007v2.pdf
@@ -783,6 +830,7 @@ class SequenceToSequence(object):
                         beam_width=self.beam_width,
                         output_layer=self.output_layer,
                     )
+
                 # For GreedyDecoder, return
                 # decoder_outputs_decode: BasicDecoderOutput instance
                 #     namedtuple(rnn_outputs, sample_id)
@@ -816,6 +864,7 @@ class SequenceToSequence(object):
                 if self.max_decode_step is not None:
                     max_decode_step = self.max_decode_step
                 else:
+                    # 默认 4 倍输入长度的输出解码
                     max_decode_step = tf.round(tf.reduce_max(
                         self.encoder_inputs_length) * 4)
 
@@ -877,29 +926,29 @@ class SequenceToSequence(object):
                     self.beam_prob = dod.beam_search_decoder_output.scores
 
 
-    def save(self, sess, save_path='model/'):
+    def save(self, sess, save_path='model.ckpt'):
         """保存模型"""
 
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
+        # if not os.path.exists(save_path):
+        #     os.makedirs(save_path)
 
-        saver = tf.train.Saver(None)
+        saver = tf.train.Saver()
         save_path = saver.save(sess,
                                save_path=save_path,
                                global_step=self.global_step)
 
 
-    def load(self, sess, save_path='model/'):
+    def load(self, sess, save_path='model.ckpt'):
         """读取模型"""
 
         if not os.path.exists(save_path):
             print('没有找到模型路径', save_path)
             return
 
-        ckpt = tf.train.get_checkpoint_state(save_path)
-        saver = tf.train.Saver(None)
-        saver.restore(sess,
-                      save_path=ckpt.model_checkpoint_path)
+        # ckpt = tf.train.get_checkpoint_state(save_path)
+        saver = tf.train.Saver()
+        saver.restore(sess, save_path)
+        # save_path=ckpt.model_checkpoint_path)
 
 
     def check_feeds(self, encoder_inputs, encoder_inputs_length,
@@ -959,11 +1008,10 @@ class SequenceToSequence(object):
 
     def init_optimizer(self):
         """初始化优化器
-        sgd, adadelta, adam, rmsprop
+        支持的方法有 sgd, adadelta, adam, rmsprop, momentum
         """
         # print("setting optimizer..")
         # Gradients and SGD update operation for training the model
-        # self.optimizer.lower()
         # 'adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'
         trainable_params = tf.trainable_variables()
         if self.optimizer.lower() == 'adadelta':

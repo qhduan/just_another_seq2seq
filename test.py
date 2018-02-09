@@ -37,7 +37,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss/'
+    save_path = '/tmp/s2ss.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():

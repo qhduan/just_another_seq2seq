@@ -29,7 +29,7 @@ gunzip -k en-zh_cn.tmx.gz
 
 ## 4、训练数据
 
-运行 `train.py` 训练（默认到`/tmp/s2ss_en2zh`目录）
+运行 `train.py` 训练（默认到`/tmp/s2ss_en2zh.ckpt`）
 
 ## 5、测试数据（测试翻译）
 

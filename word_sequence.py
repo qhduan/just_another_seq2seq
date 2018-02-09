@@ -114,10 +114,15 @@ class WordSequence(object):
         if add_end:
             sentence = list(sentence) + [self.END_TAG]
 
+        # if max_len is not None:
+        #     r = [self.PAD] * max_len
+        # else:
+        #     r = [self.PAD] * len(sentence)
+
         if max_len is not None:
-            r = [self.PAD] * max_len
+            r = [self.END] * max_len
         else:
-            r = [self.PAD] * len(sentence)
+            r = [self.END] * len(sentence)
 
         for index, a in enumerate(sentence):
             if max_len is not None and index >= len(r):

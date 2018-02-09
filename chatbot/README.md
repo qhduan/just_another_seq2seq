@@ -20,7 +20,7 @@ python3 extract_conv.py
 
 ## 4、训练数据
 
-运行 `train.py` 训练（默认到`/tmp/s2ss_chatbot`目录）
+运行 `train.py` 训练（默认到`/tmp/s2ss_chatbot.ckpt`）
 
 ## 5、测试数据（测试翻译）
 
