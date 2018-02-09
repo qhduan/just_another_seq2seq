@@ -1174,27 +1174,9 @@ def batch_flow(x_data, y_data, ws_q, ws_a, batch_size):
     """从数据中随机 batch_size 个的数据，然后 yield 出去
     """
 
-    # QHDuan
-    # 一个 trick
-    # 相当于把不同数据的长度分组，算是一种 bucket
-    # 这里弄的比较简单，复杂一点的是把“类似长度”的输出聚合到一起
-    # 例如输出句子长度1~3的一组，4~6的一组
-    # 每个batch不会出现不同组的长度
-    # 如果不这样做对于某些数据很可能完全算不出好结果
-    # sizes = sorted(list(set([len(y) for y in y_data])))
-    # sizes_data = {}
-    # for k in sizes:
-    #     v = [(x, y) for x, y in zip(x_data, y_data) if len(y) == k]
-    #     sizes_data[k] = v
-    #     while len(sizes_data[k]) < batch_size:
-    #         sizes_data[k] = sizes_data[k] + sizes_data[k]
-
     all_data = list(zip(x_data, y_data))
 
     while True:
-
-        # size = random.choice(sizes)
-        # data_batch = random.sample(sizes_data[size], batch_size)
 
         data_batch = random.sample(all_data, batch_size)
 
@@ -1227,15 +1209,12 @@ def batch_flow(x_data, y_data, ws_q, ws_a, batch_size):
 
 def batch_flow_bucket(x_data, y_data, ws_q, ws_a, batch_size, n_bucket=4):
     """从数据中随机 batch_size 个的数据，然后 yield 出去
+    一个 trick
+    相当于把不同数据的长度分组，算是一种 bucket
+    这里弄的比较简单，复杂一点的是把“类似长度”的输出聚合到一起
+    例如输出句子长度1~3的一组，4~6的一组
+    每个batch不会出现不同组的长度
     """
-
-    # QHDuan
-    # 一个 trick
-    # 相当于把不同数据的长度分组，算是一种 bucket
-    # 这里弄的比较简单，复杂一点的是把“类似长度”的输出聚合到一起
-    # 例如输出句子长度1~3的一组，4~6的一组
-    # 每个batch不会出现不同组的长度
-    # 如果不这样做对于某些数据很可能完全算不出好结果
     sizes = sorted(list(set([len(y) for y in y_data])))
     buckets = (np.linspace(0, 1, n_bucket + 1) * len(sizes)).astype(int)
     print('buckets', buckets)
