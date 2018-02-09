@@ -21,9 +21,9 @@ residsual没应用到decoder上，那个部分可能还有问题
 
 # Example
 
-[英汉句子翻译实例](/en2zh/README.md)
+[英汉句子翻译实例](/en2zh/)
 
-[Chatbot实例](/chatbot/README.md)
+[Chatbot实例](/chatbot/)
 
 # TensorFlow alert
 
