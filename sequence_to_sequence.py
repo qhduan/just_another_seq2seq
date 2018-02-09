@@ -45,8 +45,31 @@ from tensorflow.contrib.rnn import MultiRNNCell
 from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import ResidualWrapper
 from tensorflow.contrib.rnn import LSTMStateTuple
+from tensorflow.python.client import device_lib
 
 from word_sequence import WordSequence
+
+
+VOCAB_SIZE_THRESHOLD_CPU = 50000
+
+
+
+def _get_available_gpus():
+    """获取当前GPU数量"""
+    local_device_protos = device_lib.list_local_devices()
+    return [x.name for x in local_device_protos if x.device_type == 'GPU']
+
+
+def _get_embed_device(vocab_size):
+    """Decide on which device to place an embed matrix given its vocab size.
+    根据输入输出的字典大小，选择在CPU还是GPU上初始化embedding向量
+    """
+
+    gpus = _get_available_gpus
+
+    if not gpus or vocab_size > VOCAB_SIZE_THRESHOLD_CPU:
+        return "/cpu:0"
+    return "/gpu:0"
 
 
 class SequenceToSequence(object):
@@ -57,17 +80,17 @@ class SequenceToSequence(object):
                  input_vocab_size, # 输入词表大小
                  target_vocab_size, # 输出词表大小
                  batch_size=32,
-                 embedding_size=64, # 输入输出表embedding的维度
+                 embedding_size=128, # 输入输出表embedding的维度
                  mode='train', # or decode
                  # RNN模型的中间层大小，encoder和decoder层相同
                  # 如果encoder层是bidirectional的话，decoder层是双倍大小
-                 hidden_units=64,
+                 hidden_units=256,
                  depth=1, #
                  attn_input_feeding=False,
-                 # beam_width是beamsearch的超参，用于解码，如果大于1则使用beamsearch
-                 beam_width=1,
+                 # beam_width是beamsearch的超参，用于解码，如果大于0则使用beamsearch
+                 beam_width=0,
                  cell_type='lstm', # or gru
-                 dropout=0.1, # 输入输出层的dropout
+                 dropout=0.2, # 输入输出层的dropout
                  use_dropout=False, # 是否使用dropout
                  use_residual=False, # 是否使用residual
                  optimizer='adam',
@@ -143,7 +166,7 @@ class SequenceToSequence(object):
         self.use_beamsearch_decode = False
         # if self.mode == 'decode':
         self.beam_width = beam_width
-        self.use_beamsearch_decode = True if self.beam_width > 1 else False
+        self.use_beamsearch_decode = True if self.beam_width > 0 else False
         self.max_decode_step = max_decode_step
 
         self.alignment_history = alignment_history
@@ -298,12 +321,13 @@ class SequenceToSequence(object):
             )
 
             # 编码器的embedding
-            self.encoder_embeddings = tf.get_variable(
-                name='embedding',
-                shape=(self.input_vocab_size, self.embedding_size),
-                initializer=initializer,
-                dtype=tf.float32
-            )
+            with tf.device(_get_embed_device(self.input_vocab_size)):
+                self.encoder_embeddings = tf.get_variable(
+                    name='embedding',
+                    shape=(self.input_vocab_size, self.embedding_size),
+                    initializer=initializer,
+                    dtype=tf.float32
+                )
 
             # embedded之后的输入 shape = (batch_size, time_step, embedding_size)
             self.encoder_inputs_embedded = tf.nn.embedding_lookup(
@@ -342,7 +366,8 @@ class SequenceToSequence(object):
                     sequence_length=self.encoder_inputs_length,
                     dtype=tf.float32,
                     time_major=self.time_major,
-                    parallel_iterations=self.parallel_iterations
+                    parallel_iterations=self.parallel_iterations,
+                    swap_memory=True
                 )
             else:
                 self.encoder_cell_bw = self.build_encoder_cell()
@@ -356,7 +381,8 @@ class SequenceToSequence(object):
                     sequence_length=self.encoder_inputs_length,
                     dtype=tf.float32,
                     time_major=self.time_major,
-                    parallel_iterations=self.parallel_iterations
+                    parallel_iterations=self.parallel_iterations,
+                    swap_memory=True
                 )
 
                 self.encoder_outputs = tf.concat(
@@ -553,7 +579,7 @@ class SequenceToSequence(object):
     def build_decoder(self):
         """构建解码器
         """
-        with tf.variable_scope('decoder'):
+        with tf.variable_scope('decoder') as decoder_scope:
             # Building decoder_cell and decoder_initial_state
             (
                 self.decoder_cell,
@@ -567,12 +593,13 @@ class SequenceToSequence(object):
             )
 
             # 解码器embedding
-            self.decoder_embeddings = tf.get_variable(
-                name='embeddings',
-                shape=(self.target_vocab_size, self.embedding_size),
-                initializer=initializer,
-                dtype=tf.float32
-            )
+            with tf.device(_get_embed_device(self.target_vocab_size)):
+                self.decoder_embeddings = tf.get_variable(
+                    name='embeddings',
+                    shape=(self.target_vocab_size, self.embedding_size),
+                    initializer=initializer,
+                    dtype=tf.float32
+                )
 
             # QHDuan:
             # 输入输出投影本质是一个trick，减少weights数量，增加计算速度
@@ -596,9 +623,9 @@ class SequenceToSequence(object):
                 name='input_projection'
             )
 
-            # Output projection layer to convert cell_outputs to logits
-            output_layer = layers.Dense(
-                self.target_vocab_size, name='output_projection')
+            self.output_layer = layers.Dense(
+                self.target_vocab_size, use_bias=False,
+                name='output_projection')
 
             if self.mode == 'train':
                 # decoder_inputs_embedded:
@@ -626,11 +653,14 @@ class SequenceToSequence(object):
                     name='training_helper'
                 )
 
+                # 训练的时候不在这里应用 output_layer
+                # 因为这里会每个 time_step 的进行 output_layer 的投影计算，比较慢
+                # 注意这个trick要成功必须设置 dynamic_decode 的 scope 参数
                 training_decoder = seq2seq.BasicDecoder(
                     cell=self.decoder_cell,
                     helper=training_helper,
                     initial_state=self.decoder_initial_state,
-                    output_layer=output_layer
+                    # output_layer=self.output_layer
                 )
 
                 # Maximum decoder time_steps in current batch
@@ -648,7 +678,7 @@ class SequenceToSequence(object):
                 # decoder_outputs_train.sample_id: [batch_size], tf.int32
 
                 (
-                    self.decoder_outputs_train,
+                    outputs,
                     self.final_state, # contain attention
                     _ # self.final_sequence_lengths
                 ) = seq2seq.dynamic_decode(
@@ -656,21 +686,28 @@ class SequenceToSequence(object):
                     output_time_major=self.time_major,
                     impute_finished=True,
                     maximum_iterations=max_decoder_length,
-                    parallel_iterations=self.parallel_iterations
+                    parallel_iterations=self.parallel_iterations,
+                    swap_memory=True,
+                    scope=decoder_scope
                 )
 
                 # More efficient to do the projection
                 # on the batch-time-concatenated tensor
                 # logits_train:
                 # [batch_size, max_time_step + 1, num_decoder_symbols]
-                self.decoder_logits_train = tf.identity(
-                    self.decoder_outputs_train.rnn_output
+                # 训练的时候一次性对所有的结果进行 output_layer 的投影运算
+                # 官方NMT库说这样能提高10~20%的速度
+                # 实际上我提高的速度会更大
+                self.decoder_logits_train = self.output_layer(
+                    outputs.rnn_output
                 )
-                # Use argmax to extract decoder symbols to emit
-                self.decoder_pred_train = tf.argmax(
-                    self.decoder_logits_train, axis=-1,
-                    name='decoder_pred_train'
-                )
+
+                # Use argmax to
+                # extract decoder symbols to emit
+                # self.decoder_pred_train = tf.argmax(
+                #     self.decoder_logits_train, axis=-1,
+                #     name='decoder_pred_train'
+                # )
 
                 # masks: masking for valid and padded time steps,
                 # [batch_size, max_time_step + 1]
@@ -731,7 +768,7 @@ class SequenceToSequence(object):
                         cell=self.decoder_cell,
                         helper=decoding_helper,
                         initial_state=self.decoder_initial_state,
-                        output_layer=output_layer
+                        output_layer=self.output_layer
                     )
                 else:
                     # Beamsearch is used to approximately
@@ -744,7 +781,7 @@ class SequenceToSequence(object):
                         end_token=end_token,
                         initial_state=self.decoder_initial_state,
                         beam_width=self.beam_width,
-                        output_layer=output_layer,
+                        output_layer=self.output_layer,
                     )
                 # For GreedyDecoder, return
                 # decoder_outputs_decode: BasicDecoderOutput instance
@@ -791,7 +828,9 @@ class SequenceToSequence(object):
                     output_time_major=self.time_major,
                     # impute_finished=True,	# error occurs
                     maximum_iterations=max_decode_step,
-                    parallel_iterations=self.parallel_iterations
+                    parallel_iterations=self.parallel_iterations,
+                    swap_memory=True,
+                    scope=decoder_scope
                 ))
 
                 if not self.use_beamsearch_decode:
@@ -1094,22 +1133,22 @@ def batch_flow(x_data, y_data, ws_q, ws_a, batch_size):
     # 例如输出句子长度1~3的一组，4~6的一组
     # 每个batch不会出现不同组的长度
     # 如果不这样做对于某些数据很可能完全算不出好结果
-    sizes = sorted(list(set([len(y) for y in y_data])))
-    sizes_data = {}
-    for k in sizes:
-        v = [(x, y) for x, y in zip(x_data, y_data) if len(y) == k]
-        sizes_data[k] = v
-        while len(sizes_data[k]) < batch_size:
-            sizes_data[k] = sizes_data[k] + sizes_data[k]
+    # sizes = sorted(list(set([len(y) for y in y_data])))
+    # sizes_data = {}
+    # for k in sizes:
+    #     v = [(x, y) for x, y in zip(x_data, y_data) if len(y) == k]
+    #     sizes_data[k] = v
+    #     while len(sizes_data[k]) < batch_size:
+    #         sizes_data[k] = sizes_data[k] + sizes_data[k]
 
-    # all_data = list(zip(x_data, y_data))
+    all_data = list(zip(x_data, y_data))
 
     while True:
 
-        size = random.choice(sizes)
-        data_batch = random.sample(sizes_data[size], batch_size)
+        # size = random.choice(sizes)
+        # data_batch = random.sample(sizes_data[size], batch_size)
 
-        # data_batch = random.sample(all_data, batch_size)
+        data_batch = random.sample(all_data, batch_size)
 
         q_max = max([len(x[0]) for x in data_batch])
         a_max = max([len(x[1]) for x in data_batch])

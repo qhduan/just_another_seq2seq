@@ -3,7 +3,7 @@
 把tmx（xml）的数据解开，分词，然后保存到data.pkl
 """
 
-import re
+# import re
 import sys
 import pickle
 import xml.etree.ElementTree as ET
@@ -20,7 +20,7 @@ def main():
     from word_sequence import WordSequence
 
     x_data, y_data = [], []
-    tree = ET.parse('en-zh_zh.tmx')
+    tree = ET.parse('en-zh_cn.tmx')
     root = tree.getroot()
     body = root.find('body')
     for tu in tqdm(body.findall('tu')):
@@ -29,7 +29,7 @@ def main():
         for tuv in tu.findall('tuv'):
             if list(tuv.attrib.values())[0] == 'en':
                 en += tuv.find('seg').text
-            elif list(tuv.attrib.values())[0] == 'zh_zh':
+            elif list(tuv.attrib.values())[0] == 'zh_cn':
                 zh += tuv.find('seg').text
 
         if en and zh:
@@ -43,28 +43,33 @@ def main():
 
     print('tokenize')
 
+    def en_tokenize(text):
+        # text = re.sub('[\(（][^\)）]+[\)）]', '', text)
+        return nltk.word_tokenize(text.lower())
+
     x_data = [
-        nltk.word_tokenize(x.lower())
+        en_tokenize(x)
         for x in tqdm(x_data)
     ]
 
     def zh_tokenize(text):
-        text = text.replace('，', ',')
-        text = text.replace('。', '.')
-        text = text.replace('？', '?')
-        text = text.replace('！', '!')
-        text = re.sub(r'[^\u4e00-\u9fff,\.\?\!…《》]', '', text)
-        text = text.strip()
-        text = jieba.lcut(text)
+        # text = text.replace('，', ',')
+        # text = text.replace('。', '.')
+        # text = text.replace('？', '?')
+        # text = text.replace('！', '!')
+        # text = text.replace('：', ':')
+        # text = re.sub(r'[^\u4e00-\u9fff,\.\?\!…《》]:', '', text)
+        # text = text.strip()
+        text = jieba.lcut(text.lower())
         return text
 
     y_data = [
-        zh_tokenize(y.lower())
+        zh_tokenize(y)
         for y in tqdm(y_data)
     ]
 
     data = list(zip(x_data, y_data))
-    data = [(x, y) for x, y in data if len(x) < 10 and len(y) < 10]
+    data = [(x, y) for x, y in data if len(x) < 15 and len(y) < 15]
 
     x_data, y_data = [x[0] for x in data], [x[1] for x in data]
 
@@ -84,7 +89,7 @@ def main():
 
     pickle.dump(
         (x_data, y_data, ws_input, ws_target),
-        open('data.pkl', 'wb')
+        open('en-zh_cn.pkl', 'wb')
     )
 
     print('done')

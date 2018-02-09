@@ -14,14 +14,14 @@ sys.path.append('..')
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout):
+         attention_type, use_residual, use_dropout, time_major, hidden_units):
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
     from sequence_to_sequence import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
-    x_data, _, ws_input, ws_target = pickle.load(open('data.pkl', 'rb'))
+    x_data, _, ws_input, ws_target = pickle.load(open('en-zh_cn.pkl', 'rb'))
 
     for x in x_data[:5]:
         print(' '.join(x))
@@ -49,7 +49,8 @@ def test(bidirectional, cell_type, depth,
         use_residual=use_residual,
         use_dropout=use_dropout,
         parallel_iterations=1,
-        hidden_units=512 # for test
+        time_major=time_major,
+        hidden_units=hidden_units # for test
     )
     init = tf.global_variables_initializer()
 
@@ -64,6 +65,10 @@ def test(bidirectional, cell_type, depth,
             x_test = [nltk.word_tokenize(user_text.lower())]
             bar = batch_flow(x_test, x_test, ws_input, ws_target, 1)
             x, xl, _, _ = next(bar)
+            # x = np.array([
+            #     list(reversed(xx))
+            #     for xx in x
+            # ])
             print(x, xl)
             pred = model_pred.predict(
                 sess,
@@ -175,7 +180,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'gru', 1, 'Bahdanau', False, True)
+    test(True, 'lstm', 2, 'Bahdanau', False, True, True, 64)
 
 
 if __name__ == '__main__':

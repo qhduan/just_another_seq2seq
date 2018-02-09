@@ -66,7 +66,7 @@ class WordSequence(object):
         return self.size()
 
 
-    def fit(self, sentences, min_count=None, max_count=None):
+    def fit(self, sentences, min_count=5, max_count=None):
         """训练 WordSequence
         ws = WordSequence()
         ws.fit([['hello', 'world']])

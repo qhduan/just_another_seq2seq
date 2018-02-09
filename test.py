@@ -16,7 +16,7 @@ from fake_data import generate
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major=False):
+         attention_type, use_residual, use_dropout, time_major):
     """测试不同参数在生成的假数据上的运行结果"""
 
     # 获取一些假数据
@@ -24,7 +24,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
 
-    split = 9900
+    split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
     n_epoch = 2
@@ -59,6 +59,8 @@ def test(bidirectional, cell_type, depth,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
                 time_major=time_major,
+                hidden_units=64,
+                embedding_size=64,
                 parallel_iterations=1 # for test
             )
             init = tf.global_variables_initializer()
@@ -100,6 +102,8 @@ def test(bidirectional, cell_type, depth,
         use_residual=use_residual,
         use_dropout=use_dropout,
         time_major=time_major,
+        hidden_units=64,
+        embedding_size=64,
         parallel_iterations=1 # for test
     )
     init = tf.global_variables_initializer()
@@ -129,7 +133,7 @@ def test(bidirectional, cell_type, depth,
         target_vocab_size=len(ws_target),
         batch_size=1,
         mode='decode',
-        beam_width=1,
+        beam_width=0,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
@@ -137,6 +141,8 @@ def test(bidirectional, cell_type, depth,
         use_residual=use_residual,
         use_dropout=use_dropout,
         time_major=time_major,
+        hidden_units=64,
+        embedding_size=64,
         parallel_iterations=1 # for test
     )
     init = tf.global_variables_initializer()

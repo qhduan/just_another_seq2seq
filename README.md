@@ -15,6 +15,10 @@
 - [ ] 后续这个repo会作为一个基础完成一个dialog system
     - seq2seq模型至少可以作为通用NER实现（截止2018年初，最好的NER应该还是bi-LSTM + CRF）
 
+# Known issues
+
+residsual没应用到decoder上，那个部分可能还有问题
+
 # TensorFlow alert
 
 test only tensorflow == 1.4.1

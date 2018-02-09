@@ -14,14 +14,15 @@ sys.path.append('..')
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major):
+         attention_type, use_residual, use_dropout, time_major, hidden_units):
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
     from sequence_to_sequence import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
-    x_data, y_data, ws_input, ws_target = pickle.load(open('data.pkl', 'rb'))
+    x_data, y_data, ws_input, ws_target = pickle.load(
+        open('en-zh_cn.pkl', 'rb'))
 
     # 获取一些假数据
     # x_data, y_data, ws_input, ws_target = generate(size=10000)
@@ -30,9 +31,8 @@ def test(bidirectional, cell_type, depth,
     split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 10
-    batch_size = 32
-    hidden_units = 128
+    n_epoch = 2
+    batch_size = 256
     steps = int(len(x_train) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -64,7 +64,7 @@ def test(bidirectional, cell_type, depth,
                 use_dropout=use_dropout,
                 parallel_iterations=64,
                 hidden_units=hidden_units,
-                optimizer='momentum',
+                optimizer='adam',
                 time_major=time_major
             )
             init = tf.global_variables_initializer()
@@ -83,10 +83,10 @@ def test(bidirectional, cell_type, depth,
                 for _ in bar:
                     x, xl, y, yl = next(flow)
                     # trick, reverse input
-                    y = np.array([
-                        list(reversed(yy))
-                        for yy in y
-                    ])
+                    # x = np.array([
+                    #     list(reversed(xx))
+                    #     for xx in x
+                    # ])
                     cost = model.train(sess, x, xl, y, yl)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f}'.format(
@@ -123,6 +123,10 @@ def test(bidirectional, cell_type, depth,
         bar = batch_flow(x_test, y_test, ws_input, ws_target, 1)
         t = 0
         for x, xl, y, yl in bar:
+            # x = np.array([
+            #     list(reversed(xx))
+            #     for xx in x
+            # ])
             pred = model_pred.predict(
                 sess,
                 np.array(x),
@@ -161,6 +165,10 @@ def test(bidirectional, cell_type, depth,
         bar = batch_flow(x_test, y_test, ws_input, ws_target, 1)
         t = 0
         for x, xl, y, yl in bar:
+            # x = np.array([
+            #     list(reversed(xx))
+            #     for xx in x
+            # ])
             pred = model_pred.predict(
                 sess,
                 np.array(x),
@@ -179,7 +187,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'gru', 2, 'Bahdanau', False, True, True)
+    test(True, 'lstm', 2, 'Bahdanau', False, True, True, 64)
 
 
 if __name__ == '__main__':
