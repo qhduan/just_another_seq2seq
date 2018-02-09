@@ -954,24 +954,41 @@ class SequenceToSequence(object):
     def check_feeds(self, encoder_inputs, encoder_inputs_length,
                     decoder_inputs, decoder_inputs_length, decode):
         """检查输入变量，并返回input_feed
+
+        我们首先会把数据编码，例如把“你好吗”，编码为[0, 1, 2]
+        多个句子组成一个batch，共同训练，例如一个batch_size=2，那么训练矩阵就可能是
+        encoder_inputs = [
+            [0, 1, 2, 3],
+            [4, 5, 6, 7]
+        ]
+        它所代表的可能是：[['我', '是', '帅', '哥'], ['你', '好', '啊', '</s>']]
+        注意第一句的真实长度是 4，第二句只有 3（最后的</s>是一个填充数据）
+
+        那么：
+        encoder_inputs_length = [4, 3]
+        来代表输入整个batch的真实长度
+        注意，为了符合算法要求，每个batch的句子必须是长度降序的，也就是说你输入一个
+        encoder_inputs_length = [1, 10] 这样是错误的，必须在输入前排序到
+        encoder_inputs_length = [10, 1] 这样才行
+
+        decoder_inputs 和 decoder_inputs_length 所代表的含义差不多
+
         Args:
-          encoder_inputs:
-              a numpy int matrix of [batch_size, max_source_time_steps]
-              to feed as encoder inputs
-          encoder_inputs_length:
-              a numpy int vector of [batch_size]
-              to feed as sequence lengths for each element in the given batch
-          decoder_inputs:
-              a numpy int matrix of [batch_size, max_target_time_steps]
-              to feed as decoder inputs
-          decoder_inputs_length:
-              a numpy int vector of [batch_size]
-              to feed as sequence lengths for each element in the given batch
-          decode: a scalar boolean that indicates decode mode
+            encoder_inputs:
+                一个整形二维矩阵 [batch_size, max_source_time_steps]
+            encoder_inputs_length:
+                一个整形向量 [batch_size]
+                每个维度是encoder句子的真实长度
+            decoder_inputs:
+                一个整形矩阵 [batch_size, max_target_time_steps]
+            decoder_inputs_length:
+                一个整形向量 [batch_size]
+                每个维度是decoder句子的真实长度
+            decode: 用来指示正在训练模式(decode=False)还是预测模式(decode=True)
         Returns:
-          A feed for the model that consists of
-          encoder_inputs, encoder_inputs_length,
-          decoder_inputs, decoder_inputs_length
+            tensorflow所操作需要的input_feed，包括
+            encoder_inputs, encoder_inputs_length,
+            decoder_inputs, decoder_inputs_length
         """
 
         input_batch_size = encoder_inputs.shape[0]
