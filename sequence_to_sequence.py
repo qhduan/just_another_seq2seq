@@ -53,7 +53,7 @@ VOCAB_SIZE_THRESHOLD_CPU = 50000
 
 
 def _get_available_gpus():
-    """获取当前GPU数量"""
+    """获取当前可用GPU数量"""
     local_device_protos = device_lib.list_local_devices()
     return [x.name for x in local_device_protos if x.device_type == 'GPU']
 
@@ -62,9 +62,7 @@ def _get_embed_device(vocab_size):
     """Decide on which device to place an embed matrix given its vocab size.
     根据输入输出的字典大小，选择在CPU还是GPU上初始化embedding向量
     """
-
     gpus = _get_available_gpus
-
     if not gpus or vocab_size > VOCAB_SIZE_THRESHOLD_CPU:
         return "/cpu:0"
     return "/gpu:0"
@@ -72,6 +70,20 @@ def _get_embed_device(vocab_size):
 
 class SequenceToSequence(object):
     """SequenceToSequence Model
+
+    基本流程
+    __init__ 基本参数保存，验证参数合法性
+        build_model 开始构建整个模型
+            init_placeholders 初始化一些tensorflow的变量占位符
+            build_encoder 初始化编码器
+                build_single_cell
+                    build_encoder_cell
+            build_decoder 初始化解码器
+                build_single_cell
+                    build_decoder_cell
+            init_optimizer 如果是在训练模式则初始化优化器
+    train 训练一个batch的数据
+    predict 预测一个batch的数据
     """
 
     def __init__(self,
@@ -174,16 +186,17 @@ class SequenceToSequence(object):
         self.parallel_iterations = parallel_iterations
         self.time_major = time_major
 
-        assert mode in ('train', 'decode'), 'mode must be train or decode'
+        assert mode in ('train', 'decode'), \
+            'mode 必须是 "train" 或 "decode" 而不是 "{}"'.format(mode)
 
         assert dropout >= 0.0 and dropout < 1.0, '0 <= dropout < 1'
 
         assert attention_type.lower() in ('bahdanau', 'luong'), \
-            '''attention_type must be "bahdanau" or "luong" not "%s"
-            ''' % attention_type
+            '''attention_type 必须是 "bahdanau" 或 "luong" 而不是 "{}"
+            '''.format(attention_type)
 
         assert beam_width < target_vocab_size, \
-            'beam_width must < target vocab size {} {}'.format(
+            'beam_width {} must < target vocab size {}'.format(
                 beam_width, target_vocab_size
             )
 
@@ -205,7 +218,6 @@ class SequenceToSequence(object):
         )
 
         self.use_beamsearch_decode = False
-        # if self.mode == 'decode':
         self.beam_width = beam_width
         self.use_beamsearch_decode = True if self.beam_width > 0 else False
         self.max_decode_step = max_decode_step
@@ -228,7 +240,7 @@ class SequenceToSequence(object):
 
         assert self.optimizer.lower() in \
             ('adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'), \
-            'optimizer must be one of adadelta, adam, rmsprop, momentum, sgd'
+            'optimizer 必须是下列之一： adadelta, adam, rmsprop, momentum, sgd'
 
         self.build_model()
 
@@ -264,15 +276,16 @@ class SequenceToSequence(object):
             name='encoder_inputs'
         )
 
-        # 编码器长度输入，shape=(batch_size, 1)
-        # 指的是 batch_size 句话每句话的长度
-        self.encoder_inputs_length = tf.placeholder(
-            dtype=tf.int32,
-            shape=(self.batch_size,),
-            name='encoder_inputs_length'
-        )
-
-        if self.crf:
+        if not self.crf:
+            # 编码器长度输入，shape=(batch_size, 1)
+            # 指的是 batch_size 句话每句话的长度
+            self.encoder_inputs_length = tf.placeholder(
+                dtype=tf.int32,
+                shape=(self.batch_size,),
+                name='encoder_inputs_length'
+            )
+        else:
+            # crf 是固定长度的
             self.encoder_inputs_length = tf.fill(
                 dims=[self.batch_size],
                 value=self.max_decode_step,
@@ -390,6 +403,7 @@ class SequenceToSequence(object):
             # Input projection layer to feed embedded inputs to the cell
             # ** Essential when use_residual=True to match input/output dims
             # 输入投影层
+            # 如果使用了residual，为了对齐输入和输出层，这里可能必须增加一个投影
             input_layer = layers.Dense(
                 self.hidden_units, dtype=tf.float32, name='input_projection'
             )
@@ -489,11 +503,6 @@ class SequenceToSequence(object):
         # [batch_size, .., ..] -> [batch_size x beam_width, .., ..]
         if self.use_beamsearch_decode:
 
-            # if self.time_major:
-            #     encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
-            #     print('encoder_outputs', encoder_outputs.shape)
-            #     print('encoder_inputs_length', encoder_inputs_length.shape)
-
             encoder_outputs = seq2seq.tile_batch(
                 encoder_outputs, multiplier=self.beam_width)
             encoder_last_state = nest.map_structure(
@@ -501,11 +510,6 @@ class SequenceToSequence(object):
                 self.encoder_last_state)
             encoder_inputs_length = seq2seq.tile_batch(
                 self.encoder_inputs_length, multiplier=self.beam_width)
-
-            # if self.time_major:
-            #     print('encoder_outputs', encoder_outputs.shape)
-            #     print('encoder_inputs_length', encoder_inputs_length.shape)
-            #     # encoder_inputs_length = tf.transpose(encoder_inputs_length)
 
         # 计算解码器的隐藏神经元数，如果编码器是 bidirectional 的
         # 那么解码器的一些隐藏神经元应该乘2
@@ -1234,8 +1238,8 @@ def batch_flow(x_data, y_data, ws_q, ws_a, batch_size):
 def batch_flow_bucket(x_data, y_data, ws_q, ws_a, batch_size, n_bucket=4):
     """从数据中随机 batch_size 个的数据，然后 yield 出去
     一个 trick
-    相当于把不同数据的长度分组，算是一种 bucket
-    这里弄的比较简单，复杂一点的是把“类似长度”的输出聚合到一起
+    相当于把不同数据的根据 target 句子的长度分组，算是一种 bucket
+    这里弄的比较简单，复杂一点的是把“相近长度”的输出聚合到一起
     例如输出句子长度1~3的一组，4~6的一组
     每个batch不会出现不同组的长度
     """

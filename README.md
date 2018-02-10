@@ -1,25 +1,35 @@
 
+*A lot of Chinese in codes and docs*
 
 # Just another seq2seq repo
-
-*A lot of Chinese in codes and docs*
 
 - [x] 主要是从个人角度梳理了一下seq2seq的代码
 - [x] 加入了可选基本的CRF支持，loss和infer（还不确定对
 - [x] 加入了一些中文注释
 - [x] 相对于其他一些repo，bug可能会少一些
     - 有些repo的实现在不同参数下会有问题：例如有些支持gru不支持lstm，有些不支持bidirectional，有些选择depth > 1的时候会有各种bug之类的，这些问题我都尽量修正了，虽然不保证实现肯定是对的
+- [x] 后续我可能会添加一些中文的例子，例如对联、古诗、闲聊、NER
 - [ ] pretrained embedding support
 - [ ] 根据本repo，我会整理一份seq2seq中间的各种trick和实现细节的坑
-- [ ] 后续我可能会添加一些中文的例子，例如对联、古诗、闲聊、NER
 - [ ] 后续这个repo会作为一个基础完成一个dialog system
     - seq2seq模型至少可以作为通用NER实现（截止2018年初，最好的NER应该还是bi-LSTM + CRF）
 
 # Known issues
 
-residsual没应用到decoder上，那个部分可能还有问题
+Example里的例子和整个项目，虽然未经验证，但是在内存较小的电脑上（<8GB），可能会有问题。
+这涉及到数据处理、数据输入、模型参数等部分，所以严格来说并不算BUG。
+
+# Platform
+
+作者在一台64GB内存 + GTX1070 6GB + Ubuntu 16.04电脑上运行。
+
+内存肯定不需要这么大，不过显存如果在2GB，如果要在GPU上运行模型，可能需要调节batch_size等模型参数。
 
 # Example
+
+Example里面用到的数据，都是比较小且粗糙的。
+作者只基本验证了可行性，所以也不可能实用了，例如英汉翻译就别期待准确率很高了，
+大概意思到了就代表模型的一定有效性了。
 
 [英汉句子翻译实例](/en2zh/)
 
@@ -32,6 +42,12 @@ test only tensorflow == 1.4.1
 TensorFlow的API总是变，不能保证后续的更新兼容
 
 # Related work
+
+As mention in the head of `sequence_to_sequence.py`,
+At beginning, the code is heavily borrow from [here](https://github.com/JayParks/tf-seq2seq/blob/master/seq2seq_model.py)
+
+I have modified a lot of code, some ***Chinese comments*** in the code.
+And fix many bugs, restructure many things, add more features.
 
 Code was borrow heavily from:
 
@@ -53,7 +69,7 @@ Another official sequence2sequence model:
 
 https://github.com/tensorflow/tensor2tensor
 
-Another:
+Another seq2seq repo:
 
 https://github.com/ematvey/tensorflow-seq2seq-tutorials
 
