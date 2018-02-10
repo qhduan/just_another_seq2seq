@@ -83,11 +83,9 @@ def test(bidirectional, cell_type, depth,
                            desc='epoch {}, loss=0.000000'.format(epoch))
                 for _ in bar:
                     x, xl, y, yl = next(flow)
-                    # trick, reverse input
-                    # x = np.array([
-                    #     list(reversed(xx))
-                    #     for xx in x
-                    # ])
+                    # print(x)
+                    # print(xl)
+                    # exit(0)
                     cost = model.train(sess, x, xl, y, yl)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f}'.format(
@@ -124,10 +122,6 @@ def test(bidirectional, cell_type, depth,
         bar = batch_flow_bucket(x_test, y_test, ws_input, ws_target, 1)
         t = 0
         for x, xl, y, yl in bar:
-            # x = np.array([
-            #     list(reversed(xx))
-            #     for xx in x
-            # ])
             pred = model_pred.predict(
                 sess,
                 np.array(x),
@@ -166,10 +160,6 @@ def test(bidirectional, cell_type, depth,
         bar = batch_flow_bucket(x_test, y_test, ws_input, ws_target, 1)
         t = 0
         for x, xl, y, yl in bar:
-            # x = np.array([
-            #     list(reversed(xx))
-            #     for xx in x
-            # ])
             pred = model_pred.predict(
                 sess,
                 np.array(x),

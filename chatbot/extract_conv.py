@@ -9,11 +9,19 @@ from tqdm import tqdm
 sys.path.append('..')
 
 def make_split(line):
+    """构造合并两个句子之间的符号
+    """
     if re.match(r'.*([，。…？！～\.,!?])$', ''.join(line)):
         return []
     return ['，']
 
-def main():
+def main(limit=15):
+    """执行程序
+    Args:
+        limit: 只输出句子长度小于limit的句子
+    """
+    from word_sequence import WordSequence
+
     print('extract lines')
     fp = open('dgk_shooter_min.conv', 'r', errors='ignore')
     last_line = None
@@ -66,10 +74,8 @@ def main():
         print('-' * 20)
 
     data = list(zip(x_data, y_data))
-    data = [(x, y) for x, y in data if len(x) < 15 and len(y) < 15]
-    x_data, y_data = [x[0] for x in data], [x[1] for x in data]
-
-    from word_sequence import WordSequence
+    data = [(x, y) for x, y in data if len(x) < limit and len(y) < limit]
+    x_data, y_data = zip(*data)
 
     print('fit word_sequence')
 

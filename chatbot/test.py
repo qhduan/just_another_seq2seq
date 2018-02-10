@@ -31,6 +31,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
+    # save_path = '/tmp/s2ss_chatbot.ckpt'
     save_path = '/tmp/s2ss_chatbot.ckpt'
 
     # 测试部分

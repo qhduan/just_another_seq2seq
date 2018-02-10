@@ -13,9 +13,10 @@ from tqdm import tqdm
 
 sys.path.append('..')
 
-def main():
-    """
-    执行程序
+def main(limit=15):
+    """执行程序
+    Args:
+        limit: 只输出句子长度小于limit的句子
     """
     from word_sequence import WordSequence
 
@@ -69,8 +70,8 @@ def main():
     ]
 
     data = list(zip(x_data, y_data))
-    data = [(x, y) for x, y in data if len(x) < 15 and len(y) < 15]
-    x_data, y_data = [x[0] for x in data], [x[1] for x in data]
+    data = [(x, y) for x, y in data if len(x) < limit and len(y) < limit]
+    x_data, y_data = zip(*data)
 
     print(x_data[:10])
     print(y_data[:10])
