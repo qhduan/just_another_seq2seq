@@ -25,7 +25,6 @@ https://github.com/tensorflow/tensor2tensor
 """
 
 
-import os
 import math
 import random
 
@@ -533,7 +532,7 @@ class SequenceToSequence(object):
         self.decoder_cell_list = [
             self.build_single_cell(
                 num_units,
-                use_residual=False
+                use_residual=True
             )
             for i in range(self.depth)
         ]
@@ -547,7 +546,10 @@ class SequenceToSequence(object):
                 return inputs
 
             # Essential when use_residual=True
-            input_layer = layers.Dense(self.hidden_units, dtype=tf.float32,
+            hidden_units = self.hidden_units
+            if self.bidirectional:
+                hidden_units *= 2
+            input_layer = layers.Dense(hidden_units, dtype=tf.float32,
                                        name='attn_input_feeding')
             return input_layer(array_ops.concat([inputs, attention], -1))
 
@@ -664,8 +666,11 @@ class SequenceToSequence(object):
 
             # Input projection layer to feed embedded inputs to the cell
             # ** Essential when use_residual=True to match input/output dims
+            hidden_units = self.hidden_units
+            if self.bidirectional:
+                hidden_units *= 2
             input_layer = layers.Dense(
-                self.hidden_units,
+                hidden_units,
                 dtype=tf.float32,
                 name='input_projection'
             )

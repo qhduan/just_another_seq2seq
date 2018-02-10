@@ -6,6 +6,7 @@ import random
 import itertools
 from collections import OrderedDict
 
+import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
@@ -166,6 +167,9 @@ def test(bidirectional, cell_type, depth,
             if t >= 3:
                 break
 
+    # return last train loss
+    return np.mean(costs)
+
 
 def main():
     """入口程序，开始测试不同参数组合"""
@@ -185,13 +189,23 @@ def main():
 
     loop = itertools.product(*params.values())
 
+    rows = []
     for param_value in loop:
         param = OrderedDict(zip(params.keys(), param_value))
         print('=' * 30)
+        row = []
         for key, value in param.items():
             print(key, ':', value)
+            row.append(value)
         print('-' * 30)
-        test(**param)
+        cost = test(**param)
+        row += [cost]
+        rows.append(row)
+
+    columns = list(params.keys()) + ['loss']
+    dframe = pd.DataFrame(rows, columns=columns)
+    dframe.to_excel('/tmp/s2ss_test.xlsx')
+
 
     # 吐槽一下，上面的代码是下面的代码的 pythonic 的改写版本……
     # 虽然可能不是一个最好的 pythonic 实现
