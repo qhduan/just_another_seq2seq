@@ -7,9 +7,9 @@
 import sys
 import pickle
 import xml.etree.ElementTree as ET
+from tqdm import tqdm
 import nltk
 import jieba
-from tqdm import tqdm
 
 sys.path.append('..')
 

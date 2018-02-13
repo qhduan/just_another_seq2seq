@@ -6,11 +6,11 @@
 # import re
 import sys
 import pickle
-from tqdm import tqdm
 
 sys.path.append('..')
 
 def read_txt(path):
+    """读取一个txt文件的NER标注数据"""
     x_data, y_data = [], []
     x, y = [], []
     for line in open(path, 'r'):

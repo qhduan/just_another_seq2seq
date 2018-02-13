@@ -35,7 +35,7 @@ Example里面用到的数据，都是比较小且粗糙的。
 
 #### 测试结果样例
 
-我不保证能完全重复这个结果
+***我不保证能重复实现能得到一模一样的结果***
 
 ```
 Input English Sentence:go to hell
@@ -67,9 +67,16 @@ Input English Sentence:i'm really a bad boy
 
 # TensorFlow alert
 
-test only tensorflow == 1.4.1
+Test in
+
+```python
+import tensorflow as tf
+tf.__version__ >= '1.4.0' and tf.__version__ <= '1.5.0'
+```
 
 TensorFlow的API总是变，不能保证后续的更新兼容
+
+本repo本质是一个学习性质的repo，作者只是希望尽量保持代码的整齐、理解、可读，并不对不同平台（尤其windows）的兼容，或者后续更新做保证，对不起
 
 # Related work
 

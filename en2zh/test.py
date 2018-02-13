@@ -6,9 +6,9 @@ import sys
 import random
 import pickle
 
-import nltk
 import numpy as np
 import tensorflow as tf
+import nltk
 
 sys.path.append('..')
 
