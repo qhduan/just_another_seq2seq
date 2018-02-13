@@ -10,13 +10,13 @@ import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
 
-from sequence_to_sequence import SequenceToSequence
-from sequence_to_sequence import batch_flow
+from rnn_crf import RNNCRF
+from data_utils import batch_flow
 from fake_data import generate
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout):
+         use_residual, use_dropout, output_project_active):
     """测试不同参数在生成的假数据上的运行结果"""
 
     # 获取一些假数据
@@ -47,22 +47,21 @@ def test(bidirectional, cell_type, depth,
 
         with tf.Session(config=config) as sess:
 
-            model = SequenceToSequence(
+            model = RNNCRF(
                 input_vocab_size=len(ws_input),
                 target_vocab_size=len(ws_target),
+                max_decode_step=100,
                 batch_size=batch_size,
                 learning_rate=0.001,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
-                attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
+                output_project_active=output_project_active,
                 hidden_units=64,
                 embedding_size=64,
-                parallel_iterations=1, # for test
-                crf=True,
-                max_decode_step=100
+                parallel_iterations=1
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -90,23 +89,21 @@ def test(bidirectional, cell_type, depth,
 
     # 测试部分
     tf.reset_default_graph()
-    model_pred = SequenceToSequence(
+    model_pred = RNNCRF(
         input_vocab_size=len(ws_input),
         target_vocab_size=len(ws_target),
+        max_decode_step=100,
         batch_size=1,
         mode='decode',
-        beam_width=0,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
-        attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        output_project_active=output_project_active,
         hidden_units=64,
         embedding_size=64,
-        parallel_iterations=1, # for test
-        crf=True,
-        max_decode_step=100
+        parallel_iterations=1
     )
     init = tf.global_variables_initializer()
 
@@ -140,9 +137,9 @@ def main():
         ('bidirectional', (True, False)),
         ('cell_type', ('gru', 'lstm')),
         ('depth', (1, 2, 3)),
-        ('attention_type', ('Luong', 'Bahdanau')),
         ('use_residual', (True, False)),
         ('use_dropout', (True, False)),
+        ('output_project_active', (None, 'tanh', 'sigmoid', 'linear'))
     ))
 
     loop = itertools.product(*params.values())

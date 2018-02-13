@@ -11,8 +11,6 @@ https://www.tensorflow.org/tutorials/seq2seq
 test on tensorflow == 1.4.1
 seq2seq:
 https://www.tensorflow.org/versions/r1.4/api_docs/python/tf/contrib/seq2seq
-crf:
-https://www.tensorflow.org/versions/r1.4/api_docs/python/tf/contrib/crf
 
 Code was borrow heavily from:
 https://github.com/JayParks/tf-seq2seq/blob/master/seq2seq_model.py
@@ -44,28 +42,9 @@ from tensorflow.contrib.rnn import MultiRNNCell
 from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import ResidualWrapper
 from tensorflow.contrib.rnn import LSTMStateTuple
-from tensorflow.python.client import device_lib
 
 from word_sequence import WordSequence
-
-
-VOCAB_SIZE_THRESHOLD_CPU = 50000
-
-
-def _get_available_gpus():
-    """获取当前可用GPU数量"""
-    local_device_protos = device_lib.list_local_devices()
-    return [x.name for x in local_device_protos if x.device_type == 'GPU']
-
-
-def _get_embed_device(vocab_size):
-    """Decide on which device to place an embed matrix given its vocab size.
-    根据输入输出的字典大小，选择在CPU还是GPU上初始化embedding向量
-    """
-    gpus = _get_available_gpus
-    if not gpus or vocab_size > VOCAB_SIZE_THRESHOLD_CPU:
-        return "/cpu:0"
-    return "/gpu:0"
+from data_utils import _get_embed_device
 
 
 class SequenceToSequence(object):
@@ -107,7 +86,6 @@ class SequenceToSequence(object):
                  attention_type='Bahdanau',
                  bidirectional=False,
                  alignment_history=False,
-                 crf=False,
                  time_major=False,
                  seed=0,
                  parallel_iterations=32):
@@ -141,10 +119,6 @@ class SequenceToSequence(object):
             alignment_history:
                 是否记录alignment历史，用于查看attention热力图
                 详情可以参考 test_atten.py 文件中显示热力图的代码
-            crf:
-                是否使用 crf loss 和 crf inference
-                如果使用 crf 会代替一般 seq2seq 的 decoder 部分
-                具体可以参考 build_decoder_crf 函数
             time_major:
                 是否在“计算过程”中使用时间为主的批量数据
                 注意，改变这个参数并不要求改变输入数据的格式
@@ -181,7 +155,6 @@ class SequenceToSequence(object):
         self.max_gradient_norm = max_gradient_norm
         self.keep_prob = 1.0 - dropout
         self.bidirectional = bidirectional
-        self.crf = crf
         self.seed = seed
         self.parallel_iterations = parallel_iterations
         self.time_major = time_major
@@ -224,19 +197,10 @@ class SequenceToSequence(object):
 
         self.alignment_history = alignment_history
 
-        assert not self.crf or \
-            (self.crf and isinstance(self.max_decode_step, int)), \
-            '如果CRF模式开启，则必须设置一个整数值的max_decode_step'
-
         assert (self.use_beamsearch_decode and not self.alignment_history) or \
             (not self.use_beamsearch_decode and self.alignment_history) or \
             (not self.use_beamsearch_decode and not self.alignment_history), \
             'beamsearch和alignment_history不能同时打开'
-
-        assert (self.use_beamsearch_decode and not self.crf) or \
-            (not self.use_beamsearch_decode and self.crf) or \
-            (not self.use_beamsearch_decode and not self.crf), \
-            'beamsearch和crf不能同时打开'
 
         assert self.optimizer.lower() in \
             ('adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'), \
@@ -254,11 +218,7 @@ class SequenceToSequence(object):
         """
         self.init_placeholders()
         self.build_encoder()
-        if not self.crf:
-            self.build_decoder()
-        else:
-            # 如果在 crf 模式下，则用 一个简单投影层 代替 seq2seq 的一般RNN解码器
-            self.build_decoder_crf()
+        self.build_decoder()
 
         if self.mode == 'train':
             self.init_optimizer()
@@ -276,23 +236,15 @@ class SequenceToSequence(object):
             name='encoder_inputs'
         )
 
-        if not self.crf:
-            # 编码器长度输入，shape=(batch_size, 1)
-            # 指的是 batch_size 句话每句话的长度
-            self.encoder_inputs_length = tf.placeholder(
-                dtype=tf.int32,
-                shape=(self.batch_size,),
-                name='encoder_inputs_length'
-            )
-        else:
-            # crf 是固定长度的
-            self.encoder_inputs_length = tf.fill(
-                dims=[self.batch_size],
-                value=self.max_decode_step,
-                name='encoder_inputs_length'
-            )
+        # 编码器长度输入，shape=(batch_size, 1)
+        # 指的是 batch_size 句话每句话的长度
+        self.encoder_inputs_length = tf.placeholder(
+            dtype=tf.int32,
+            shape=(self.batch_size,),
+            name='encoder_inputs_length'
+        )
 
-        if self.mode == 'train' or self.crf:
+        if self.mode == 'train':
             # 训练模式
 
             # 解码器输入，shape=(batch_size, time_step)
@@ -587,64 +539,6 @@ class SequenceToSequence(object):
         decoder_initial_state = tuple(initial_state)
 
         return MultiRNNCell(self.decoder_cell_list), decoder_initial_state
-
-
-    def build_decoder_crf(self):
-        """构建crf解码器
-        """
-
-        with tf.variable_scope('decoder_crf'):
-            encoder_outputs = self.encoder_outputs
-
-            hidden_units = self.hidden_units
-            if self.bidirectional:
-                hidden_units *= 2
-
-            encoder_outputs = tf.concat(encoder_outputs,
-                                        axis=2)
-            encoder_outputs = tf.reshape(encoder_outputs,
-                                         [-1, hidden_units], name='crf_output')
-            self.encoder_outputs = encoder_outputs
-
-            # Initialize decoder embeddings to have variance=1.
-            sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
-            initializer = tf.random_uniform_initializer(
-                -sqrt3, sqrt3, dtype=tf.float32
-            )
-
-            # 把encoder的结果进行一次线性变换所需要的变量
-            crf_w = tf.get_variable('crf_w',
-                                    [hidden_units, self.target_vocab_size],
-                                    initializer=initializer)
-            crf_b = tf.get_variable('crf_b', [self.target_vocab_size],
-                                    initializer=tf.zeros_initializer())
-
-            outputs = tf.matmul(encoder_outputs, crf_w) + crf_b
-
-            # crf 计算必须固定住max_decode_step
-            self.decoder_outputs_decode = tf.reshape(
-                outputs,
-                shape=[self.batch_size,
-                       self.max_decode_step,
-                       self.target_vocab_size])
-
-            (
-                log_likelihood,
-                self.transition_params
-            ) = tf.contrib.crf.crf_log_likelihood(
-                self.decoder_outputs_decode,
-                self.decoder_inputs,
-                self.decoder_inputs_length)
-
-            (
-                self.viterbi_sequence,
-                self.viterbi_score
-            ) = tf.contrib.crf.crf_decode(
-                self.decoder_outputs_decode,
-                self.transition_params,
-                self.encoder_inputs_length)
-
-            self.loss = tf.reduce_mean(-log_likelihood)
 
 
     def build_decoder(self):
@@ -1083,21 +977,6 @@ class SequenceToSequence(object):
               decoder_inputs, decoder_inputs_length):
         """训练模型"""
 
-        if self.crf:
-            # 如果是crf模式，自动 padding 到 self.max_decode_step
-            # self.max_decode_step 相当于 max_time_step
-            encoder_inputs_crf = []
-            for item in encoder_inputs:
-                encoder_inputs_crf.append(list(item) + \
-                    [WordSequence.PAD] * (self.max_decode_step - len(item)))
-            encoder_inputs = np.array(encoder_inputs_crf)
-
-            decoder_inputs_crf = []
-            for item in decoder_inputs:
-                decoder_inputs_crf.append(list(item) + \
-                    [WordSequence.PAD] * (self.max_decode_step - len(item)))
-            decoder_inputs = np.array(decoder_inputs_crf)
-
         # 输入
         input_feed = self.check_feeds(
             encoder_inputs, encoder_inputs_length,
@@ -1120,85 +999,46 @@ class SequenceToSequence(object):
         """预测输出"""
 
         # 输入
-        if not self.crf:
-            input_feed = self.check_feeds(
-                encoder_inputs, encoder_inputs_length,
-                None, None,
-                True
-            )
-        else:
-            # 如果是 crf 模式，就把输入补全到最大长度 self.max_decode_step
-            # 相当于 max_time_step
-            encoder_inputs_crf = []
-            for item in encoder_inputs:
-                encoder_inputs_crf.append(list(item) + \
-                    [WordSequence.PAD] * (self.max_decode_step - len(item)))
-            encoder_inputs = np.array(encoder_inputs_crf)
-
-            input_feed = self.check_feeds(
-                encoder_inputs, encoder_inputs_length,
-                np.zeros(encoder_inputs.shape),
-                np.zeros(encoder_inputs_length.shape),
-                True
-            )
+        input_feed = self.check_feeds(
+            encoder_inputs, encoder_inputs_length,
+            None, None,
+            True
+        )
 
         input_feed[self.keep_prob_placeholder.name] = 1.0
 
-        if not self.crf:
-            # not crf mode
-            if attention:
+        if attention:
 
-                if self.use_beamsearch_decode:
-
-                    pred, atten = sess.run([
-                        self.decoder_pred_decode,
-                        self.final_state[1].alignment_history.stack()
-                    ], input_feed)
-
-                    return predpred[:, -1], atten
+            if self.use_beamsearch_decode:
 
                 pred, atten = sess.run([
                     self.decoder_pred_decode,
                     self.final_state[1].alignment_history.stack()
                 ], input_feed)
 
-                return pred, atten
+                return predpred[:, -1], atten
 
-            # else:
+            pred, atten = sess.run([
+                self.decoder_pred_decode,
+                self.final_state[1].alignment_history.stack()
+            ], input_feed)
 
-            if self.use_beamsearch_decode:
-                pred, = sess.run([
-                    self.decoder_pred_decode
-                ], input_feed)
+            return pred, atten
 
-                return pred[:, -1]
+        # else:
 
+        if self.use_beamsearch_decode:
             pred, = sess.run([
                 self.decoder_pred_decode
             ], input_feed)
 
-            return pred
-        else:
-            # crf mode
-            # pred, transition_params = sess.run([
-            #     self.decoder_outputs_decode,
-            #     self.transition_params
-            # ], input_feed)
-            #
-            # preds = []
-            # for i in range(pred.shape[0]):
-            #     item, _ = tf.contrib.crf.viterbi_decode(
-            #         pred[i][:encoder_inputs_length[i]],
-            #         transition_params)
-            #     item = item[:encoder_inputs_length[i]]
-            #     preds.append(item)
-            pred, = sess.run([self.viterbi_sequence], input_feed)
-            preds = []
-            for i in range(pred.shape[0]):
-                item = pred[i][:encoder_inputs_length[i]]
-                preds.append(item)
+            return pred[:, -1]
 
-            return np.array(preds)
+        pred, = sess.run([
+            self.decoder_pred_decode
+        ], input_feed)
+
+        return pred
 
 
 def transform_data(q, a, ws_q, ws_a, q_max, a_max):

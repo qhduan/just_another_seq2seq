@@ -12,7 +12,7 @@ import tensorflow as tf
 from tqdm import tqdm
 
 from sequence_to_sequence import SequenceToSequence
-from sequence_to_sequence import batch_flow
+from data_utils import batch_flow
 from fake_data import generate
 
 

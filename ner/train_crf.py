@@ -1,5 +1,5 @@
 """
-对SequenceToSequence模型进行基本的参数组合测试
+对RNNCRF模型进行基本的参数组合测试
 """
 
 import sys
@@ -14,11 +14,12 @@ sys.path.append('..')
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major, hidden_units):
+         use_residual, use_dropout, time_major, hidden_units,
+         output_project_active):
     """测试不同参数在生成的假数据上的运行结果"""
 
-    from sequence_to_sequence import SequenceToSequence
-    from sequence_to_sequence import batch_flow_bucket
+    from rnn_crf import RNNCRF
+    from data_utils import batch_flow_bucket
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
     x_data, y_data, ws_input, ws_target = pickle.load(
@@ -51,23 +52,22 @@ def test(bidirectional, cell_type, depth,
 
         with tf.Session(config=config) as sess:
 
-            model = SequenceToSequence(
+            model = RNNCRF(
                 input_vocab_size=len(ws_input),
                 target_vocab_size=len(ws_target),
+                max_decode_step=100,
                 batch_size=batch_size,
                 learning_rate=0.001,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
-                attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
                 parallel_iterations=64,
                 hidden_units=hidden_units,
                 optimizer='adam',
                 time_major=time_major,
-                crf=True,
-                max_decode_step=100
+                output_project_active=output_project_active
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -97,23 +97,21 @@ def test(bidirectional, cell_type, depth,
     # 测试部分
 
     tf.reset_default_graph()
-    model_pred = SequenceToSequence(
+    model_pred = RNNCRF(
         input_vocab_size=len(ws_input),
         target_vocab_size=len(ws_target),
+        max_decode_step=100,
         batch_size=1,
         mode='decode',
-        beam_width=0,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
-        attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
         hidden_units=hidden_units,
         time_major=time_major,
         parallel_iterations=1,
-        crf=True,
-        max_decode_step=100
+        output_project_active=output_project_active
     )
     init = tf.global_variables_initializer()
 
@@ -142,7 +140,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'lstm', 1, 'Bahdanau', False, True, False, 64)
+    test(True, 'lstm', 1, False, True, False, 64, 'tanh')
 
 
 if __name__ == '__main__':
