@@ -31,7 +31,7 @@ def test(bidirectional, cell_type, depth,
     split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 20
+    n_epoch = 5
     batch_size = 256
     steps = int(len(x_train) / batch_size) + 1
 
@@ -178,7 +178,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'lstm', 3, 'Bahdanau', True, True, True, 64)
+    test(True, 'lstm', 1, 'Bahdanau', True, True, True, 64)
 
 
 if __name__ == '__main__':
