@@ -636,6 +636,14 @@ class SequenceToSequence(object):
                 self.decoder_inputs,
                 self.decoder_inputs_length)
 
+            (
+                self.viterbi_sequence,
+                self.viterbi_score
+            ) = tf.contrib.crf.crf_decode(
+                self.decoder_outputs_decode,
+                self.transition_params,
+                self.encoder_inputs_length)
+
             self.loss = tf.reduce_mean(-log_likelihood)
 
 
@@ -1172,16 +1180,22 @@ class SequenceToSequence(object):
             return pred
         else:
             # crf mode
-            pred, transition_params = sess.run([
-                self.decoder_outputs_decode,
-                self.transition_params
-            ], input_feed)
-
+            # pred, transition_params = sess.run([
+            #     self.decoder_outputs_decode,
+            #     self.transition_params
+            # ], input_feed)
+            #
+            # preds = []
+            # for i in range(pred.shape[0]):
+            #     item, _ = tf.contrib.crf.viterbi_decode(
+            #         pred[i][:encoder_inputs_length[i]],
+            #         transition_params)
+            #     item = item[:encoder_inputs_length[i]]
+            #     preds.append(item)
+            pred, = sess.run([self.viterbi_sequence], input_feed)
             preds = []
             for i in range(pred.shape[0]):
-                item, _ = tf.contrib.crf.viterbi_decode(
-                    pred[i], transition_params)
-                item = item[:encoder_inputs_length[i]]
+                item = pred[i][:encoder_inputs_length[i]]
                 preds.append(item)
 
             return np.array(preds)

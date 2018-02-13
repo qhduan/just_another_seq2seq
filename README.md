@@ -63,6 +63,8 @@ Input English Sentence:i'm really a bad boy
 
 [Chatbot实例](/chatbot/)
 
+[NER实例](/ner/)
+
 # TensorFlow alert
 
 test only tensorflow == 1.4.1

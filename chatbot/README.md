@@ -3,20 +3,29 @@
 
 ## 1、下载数据
 
-shooter data from
+ssubtitle data from [here](https://github.com/fateleak/dgk_lost_conv)
 
-https://github.com/fateleak/dgk_lost_conv
-
+```
 wget https://github.com/fateleak/dgk_lost_conv/raw/master/dgk_shooter_min.conv.zip
+```
 
+输出：`dgk_shooter_min.conv.zip`
 
 ## 2、解压缩
 
+```
 unzip dgk_shooter_min.conv.zip
+```
+
+输出：`dgk_shooter_min.conv`
 
 ## 3、预处理数据
 
+```
 python3 extract_conv.py
+```
+
+输出：`chatbot.pkl`
 
 ## 4、训练数据
 

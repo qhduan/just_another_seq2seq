@@ -5,11 +5,15 @@
 
 下载页面
 
-http://opus.nlpl.eu/OpenSubtitles2018.php
+Enlish and Chinese parallel corpus from [here](http://opus.nlpl.eu/OpenSubtitles2018.php)
 
 下载链接：
 
+```
 wget -O "en-zh_cn.tmx.gz" "http://opus.nlpl.eu/download.php?f=OpenSubtitles2018/en-zh_cn.tmx.gz"
+```
+
+输出：`en-zh_cn.tmx.gz`
 
 ## 2、解压数据
 
@@ -17,7 +21,9 @@ wget -O "en-zh_cn.tmx.gz" "http://opus.nlpl.eu/download.php?f=OpenSubtitles2018/
 
 解压缩：
 
+```
 gunzip -k en-zh_cn.tmx.gz
+```
 
 下载并解压数据，然后重命名为 `en-zh_zh.tmx` （如果有有必要）
 
@@ -25,7 +31,7 @@ gunzip -k en-zh_cn.tmx.gz
 
 ## 3、预处理数据
 
-运行 `extract_tmx.py` 得到 `data.pkl`
+运行 `extract_tmx.py` 得到 `en-zh_cn.pkl`
 
 ## 4、训练数据
 
@@ -37,7 +43,7 @@ gunzip -k en-zh_cn.tmx.gz
 
 ## 测试结果样例
 
-我不保证能完全重复这个结果
+***我不保证能重复实现能得到一模一样的结果***
 
 ```
 Input English Sentence:go to hell
