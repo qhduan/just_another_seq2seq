@@ -223,6 +223,8 @@ class SequenceToSequence(object):
         if self.mode == 'train':
             self.init_optimizer()
 
+        self.saver = tf.train.Saver()
+
 
     def init_placeholders(self):
         """初始化训练、预测所需的变量
@@ -252,6 +254,13 @@ class SequenceToSequence(object):
                 dtype=tf.int32,
                 shape=(self.batch_size, None),
                 name='decoder_inputs'
+            )
+
+            # 解码器输入的reward，用于强化学习训练，shape=(batch_size, time_step)
+            self.rewards = tf.placeholder(
+                dtype=tf.float32,
+                shape=(self.batch_size, None),
+                name='rewards'
             )
 
             # 解码器长度输入，shape=(batch_size,)
@@ -660,20 +669,14 @@ class SequenceToSequence(object):
                     outputs.rnn_output
                 )
 
-                # Use argmax to
-                # extract decoder symbols to emit
-                # self.decoder_pred_train = tf.argmax(
-                #     self.decoder_logits_train, axis=-1,
-                #     name='decoder_pred_train'
-                # )
-
                 # masks: masking for valid and padded time steps,
                 # [batch_size, max_time_step + 1]
-                masks = tf.sequence_mask(
+                self.masks = tf.sequence_mask(
                     lengths=self.decoder_inputs_length_train,
                     maxlen=max_decoder_length,
                     dtype=tf.float32, name='masks'
                 )
+
 
                 # Computes per word average cross-entropy over a batch
                 # Internally calls
@@ -684,10 +687,38 @@ class SequenceToSequence(object):
                     decoder_logits_train = tf.transpose(decoder_logits_train,
                                                         (1, 0, 2))
 
+                self.decoder_pred_train = tf.argmax(
+                    decoder_logits_train, axis=-1,
+                    name='decoder_pred_train')
+
+                # 下面的一些变量用于强化学习训练
+                self.train_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=self.decoder_targets_train,
+                    logits=decoder_logits_train)
+                self.train_entropy *= self.masks
+                self.train_entropy_rewards = self.train_entropy * self.rewards
+                self.train_entropy_rewards *= self.masks
+
+                # https://github.com/tensorflow/tensorflow/blob/r1.5/tensorflow/contrib/seq2seq/python/ops/loss.py
+                # if average_across_timesteps and average_across_batch:
+                #   crossent = math_ops.reduce_sum(crossent)
+                #   total_size = math_ops.reduce_sum(weights)
+                #   total_size += 1e-12  # to avoid division by 0 for all-0 weights
+                #   crossent /= total_size
+
+                self.loss_without_rewards = tf.reduce_sum(self.train_entropy)
+                self.loss_rewards = tf.reduce_sum(self.train_entropy_rewards)
+
+                total_size = tf.reduce_sum(self.masks)
+                total_size += 1e-12
+                self.loss_without_rewards /= total_size
+                self.loss_rewards /= total_size
+
+
                 self.loss = seq2seq.sequence_loss(
                     logits=decoder_logits_train,
                     targets=self.decoder_targets_train,
-                    weights=masks,
+                    weights=self.masks,
                     average_across_timesteps=True,
                     average_across_batch=True,
                 )
@@ -843,9 +874,9 @@ class SequenceToSequence(object):
         # if not os.path.exists(save_path):
         #     os.makedirs(save_path)
 
-        saver = tf.train.Saver()
-        save_path = saver.save(sess,
-                               save_path=save_path) #,
+        # saver = tf.train.Saver()
+        self.saver.save(sess,
+                        save_path=save_path) #,
                                # global_step=self.global_step)
 
 
@@ -857,11 +888,55 @@ class SequenceToSequence(object):
 
         print('try load model from', save_path)
         # ckpt = tf.train.get_checkpoint_state(save_path)
-        saver = tf.train.Saver()
+        # saver = tf.train.Saver()
         # saver = tf.train.import_meta_graph(save_path)
         # saver.restore(sess, save_path=ckpt.model_checkpoint_path)
         # saver = tf.train.import_meta_graph(save_path + '.meta')
-        saver.restore(sess, save_path)
+        self.saver.restore(sess, save_path)
+
+
+    def init_optimizer(self):
+        """初始化优化器
+        支持的方法有 sgd, adadelta, adam, rmsprop, momentum
+        """
+        # print("setting optimizer..")
+        # Gradients and SGD update operation for training the model
+        # 'adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'
+        trainable_params = tf.trainable_variables()
+        if self.optimizer.lower() == 'adadelta':
+            self.opt = tf.train.AdadeltaOptimizer(
+                learning_rate=self.learning_rate)
+        elif self.optimizer.lower() == 'adam':
+            self.opt = tf.train.AdamOptimizer(
+                learning_rate=self.learning_rate)
+        elif self.optimizer.lower() == 'rmsprop':
+            self.opt = tf.train.RMSPropOptimizer(
+                learning_rate=self.learning_rate)
+        elif self.optimizer.lower() == 'momentum':
+            self.opt = tf.train.MomentumOptimizer(
+                learning_rate=self.learning_rate, momentum=0.9)
+        elif self.optimizer.lower() == 'sgd':
+            self.opt = tf.train.GradientDescentOptimizer(
+                learning_rate=self.learning_rate)
+
+        # Compute gradients of loss w.r.t. all trainable variables
+        gradients = tf.gradients(self.loss, trainable_params)
+        # Clip gradients by a given maximum_gradient_norm
+        clip_gradients, _ = tf.clip_by_global_norm(
+            gradients, self.max_gradient_norm)
+        # Update the model
+        self.updates = self.opt.apply_gradients(
+            zip(clip_gradients, trainable_params),
+            global_step=self.global_step)
+
+        # 使用包括rewards的loss进行更新
+        # 是强化学习的一部分
+        gradients = tf.gradients(self.loss_rewards, trainable_params)
+        clip_gradients, _ = tf.clip_by_global_norm(
+            gradients, self.max_gradient_norm)
+        self.updates_rewards = self.opt.apply_gradients(
+            zip(clip_gradients, trainable_params),
+            global_step=self.global_step)
 
 
     def check_feeds(self, encoder_inputs, encoder_inputs_length,
@@ -936,45 +1011,8 @@ class SequenceToSequence(object):
         return input_feed
 
 
-    def init_optimizer(self):
-        """初始化优化器
-        支持的方法有 sgd, adadelta, adam, rmsprop, momentum
-        """
-        # print("setting optimizer..")
-        # Gradients and SGD update operation for training the model
-        # 'adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'
-        trainable_params = tf.trainable_variables()
-        if self.optimizer.lower() == 'adadelta':
-            self.opt = tf.train.AdadeltaOptimizer(
-                learning_rate=self.learning_rate)
-        elif self.optimizer.lower() == 'adam':
-            self.opt = tf.train.AdamOptimizer(
-                learning_rate=self.learning_rate)
-        elif self.optimizer.lower() == 'rmsprop':
-            self.opt = tf.train.RMSPropOptimizer(
-                learning_rate=self.learning_rate)
-        elif self.optimizer.lower() == 'momentum':
-            self.opt = tf.train.MomentumOptimizer(
-                learning_rate=self.learning_rate, momentum=0.9)
-        elif self.optimizer.lower() == 'sgd':
-            self.opt = tf.train.GradientDescentOptimizer(
-                learning_rate=self.learning_rate)
-
-        # Compute gradients of loss w.r.t. all trainable variables
-        gradients = tf.gradients(self.loss, trainable_params)
-
-        # Clip gradients by a given maximum_gradient_norm
-        clip_gradients, _ = tf.clip_by_global_norm(
-            gradients, self.max_gradient_norm)
-
-        # Update the model
-        self.updates = self.opt.apply_gradients(
-            zip(clip_gradients, trainable_params),
-            global_step=self.global_step)
-
-
     def train(self, sess, encoder_inputs, encoder_inputs_length,
-              decoder_inputs, decoder_inputs_length):
+              decoder_inputs, decoder_inputs_length, rewards=None):
         """训练模型"""
 
         # 输入
@@ -987,11 +1025,53 @@ class SequenceToSequence(object):
         # 设置 dropout
         input_feed[self.keep_prob_placeholder.name] = self.keep_prob
 
-        # 输出
-        output_feed = [self.updates, self.loss]
-        _, cost = sess.run(output_feed, input_feed)
+        if rewards is None:
+            # 输出
+            output_feed = [self.updates, self.loss]
+            _, cost = sess.run(output_feed, input_feed)
 
-        return cost
+            return cost
+
+        else:
+            input_feed[self.rewards.name] = rewards
+            # output_feed = [self.updates_rewards, self.loss_rewards]
+            output_feed = [
+                self.updates_rewards,
+                self.loss_without_rewards
+            ]
+            _, cost = sess.run(output_feed, input_feed)
+
+            return cost
+
+
+    def get_encoder_embedding(self, sess, encoder_inputs):
+        """获取经过embedding的encoder_inputs"""
+
+        input_feed = {
+            self.encoder_inputs.name: encoder_inputs
+        }
+
+        emb = sess.run(self.encoder_inputs_embedded, input_feed)
+        return emb
+
+
+    def entropy(self, sess, encoder_inputs, encoder_inputs_length,
+                decoder_inputs, decoder_inputs_length):
+        """获取针对一组输入输出的entropy"""
+        # 输入
+        input_feed = self.check_feeds(
+            encoder_inputs, encoder_inputs_length,
+            decoder_inputs, decoder_inputs_length,
+            False
+        )
+
+        # 设置 dropout
+        input_feed[self.keep_prob_placeholder.name] = 1.0
+
+        output_feed = [self.train_entropy, self.decoder_pred_train]
+
+        entropy, logits = sess.run(output_feed, input_feed)
+        return entropy, logits
 
 
     def predict(self, sess,
