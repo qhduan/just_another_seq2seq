@@ -211,7 +211,7 @@ def test(bidirectional, cell_type, depth,
                             'constant', constant_values=0)
 
             # print('emb_p1.shape, emb_p2.shape', emb_p1.shape, emb_p2.shape)
-            reward_2 = np.sum(emb_p1 * emb_p2, axis=(1, 2))) / (
+            reward_2 = np.sum(emb_p1 * emb_p2, axis=(1, 2)) / (
                 np.sqrt(np.sum(emb_p1 ** 2)) * np.sqrt(np.sum(emb_p2 ** 2)) \
                 + 1e-12
             )
