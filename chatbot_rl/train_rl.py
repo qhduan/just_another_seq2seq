@@ -29,8 +29,9 @@ def test(bidirectional, cell_type, depth,
     dull_data = [
         list('我不知道你在说什么'),
         list('你知道我的意思'),
-        list('你知道你知道'),
+        list('我们要去哪里？'),
         list('你什么都不知道'),
+        list('你知道你知道'),
         list('你说什么？'),
         list('为什么？'),
         list('我不知道'),
@@ -49,13 +50,14 @@ def test(bidirectional, cell_type, depth,
         list('不好'),
         list('谁？'),
         list('好'),
+        list('对'),
     ]
 
     p1_data, q1_data, p2_data, ws = pickle.load(
         open('chatbot_rl.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 5
+    n_epoch = 10
     batch_size = 256
     padding_size = 20
     limit = 8
