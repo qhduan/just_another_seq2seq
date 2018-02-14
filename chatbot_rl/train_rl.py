@@ -185,11 +185,11 @@ def test(bidirectional, cell_type, depth,
                 reward_1, _ = model_rl.entropy(
                     sess_rl, a, al, d, dl
                 )
-                reward_1 = -reward_1
+                # reward_1 = -reward_1
                 reward_1 = np.pad(reward_1,
                                   ((0, 0), (0, padding_size - reward_1.shape[1])),
                                   'constant', constant_values=0)
-                reward_1 /= dl[0] + 1e-12
+                reward_1 *= -1.0 / len(dull)
                 reward_1_s.append(reward_1)
             reward_1_s = np.array(reward_1_s)
             reward_1 = np.sum(np.mean(reward_1_s, axis=0), axis=1)
@@ -246,10 +246,10 @@ def test(bidirectional, cell_type, depth,
             # print('forward_loss.shape, backward_loss.shape', forward_loss.shape, backward_loss.shape)
 
             for i in range(forward_loss.shape[0]):
-                forward_loss[i,:] /= al[i] + 1e-12
+                forward_loss[i,:] /= al[i]
 
             for i in range(backward_loss.shape[0]):
-                backward_loss[i,:] /= q1l[i] + 1e-12
+                backward_loss[i,:] /= q1l[i]
 
             reward_3 = forward_loss + backward_loss
             reward_3 = np.nan_to_num(reward_3)
@@ -267,6 +267,8 @@ def test(bidirectional, cell_type, depth,
             # print(np.mean(reward_1), np.mean(reward_2), np.mean(reward_3))
 
             rewards = reward_1 * lambda_1 + reward_2 * lambda_2 + reward_3 * lambda_3
+
+            rewards = sigmoid(rewards) * 1.1
 
             # gradually anneal the value of L to zero
             # rewards[:,:limit] = 1.0
@@ -294,10 +296,14 @@ def test(bidirectional, cell_type, depth,
 
             costs.append(cost)
             lengths.append(np.mean(al))
-            bar.set_description('epoch {} loss={:.6f} {:.4f}'.format(
+            bar.set_description('epoch {} loss={:.6f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}'.format(
                 epoch,
                 np.mean(costs),
-                np.mean(lengths)
+                np.mean(lengths),
+                np.mean(reward_1),
+                np.mean(reward_2),
+                np.mean(reward_3),
+                np.mean(rewards)
             ))
 
         # epoch end
