@@ -13,6 +13,10 @@ from tqdm import tqdm
 sys.path.append('..')
 
 
+def sigmoid(x):
+    return 1 / (1 + np.exp(-x))
+
+
 def test(bidirectional, cell_type, depth,
          attention_type, use_residual, use_dropout, time_major, hidden_units):
     """测试不同参数在生成的假数据上的运行结果"""
@@ -25,18 +29,26 @@ def test(bidirectional, cell_type, depth,
     dull_data = [
         list('我不知道你在说什么'),
         list('你知道我的意思'),
+        list('你知道你知道'),
         list('你什么都不知道'),
+        list('你说什么？'),
+        list('为什么？'),
         list('我不知道'),
+        list('我很抱歉'),
         list('我知道了'),
+        list('不喜欢'),
         list('是的'),
         list('不是'),
         list('我不'),
         list('好的'),
-        list('好'),
         list('什么'),
         list('没有'),
         list('喜欢'),
         list('我想'),
+        list('什么'),
+        list('不好'),
+        list('谁？'),
+        list('好'),
     ]
 
     p1_data, q1_data, p2_data, ws = pickle.load(
@@ -177,10 +189,10 @@ def test(bidirectional, cell_type, depth,
                 reward_1 = np.pad(reward_1,
                                   ((0, 0), (0, padding_size - reward_1.shape[1])),
                                   'constant', constant_values=0)
-                reward_1 /= dl[0]
+                reward_1 /= dl[0] + 1e-12
                 reward_1_s.append(reward_1)
             reward_1_s = np.array(reward_1_s)
-            reward_1 = np.mean(reward_1_s, axis=0)
+            reward_1 = np.sum(np.mean(reward_1_s, axis=0), axis=1)
             reward_1 = np.nan_to_num(reward_1)
             reward_1[reward_1 == -np.inf] = 0
             reward_1[reward_1 == np.inf] = 0
@@ -199,10 +211,11 @@ def test(bidirectional, cell_type, depth,
                             'constant', constant_values=0)
 
             # print('emb_p1.shape, emb_p2.shape', emb_p1.shape, emb_p2.shape)
-            reward_2 = np.sum(emb_p1 * emb_p2, axis=2) / (
-                np.sqrt(np.sum(emb_p1 ** 2)) * np.sqrt(np.sum(emb_p2 ** 2))
+            reward_2 = np.sum(emb_p1 * emb_p2, axis=(1, 2))) / (
+                np.sqrt(np.sum(emb_p1 ** 2)) * np.sqrt(np.sum(emb_p2 ** 2)) \
+                + 1e-12
             )
-            reward_2 = -np.log(reward_2)
+            reward_2 = -np.log(reward_2 + 1e-12)
             # reward_2 /= batch_size
             reward_2 = np.nan_to_num(reward_2)
             reward_2[reward_2 == -np.inf] = 0
@@ -213,9 +226,11 @@ def test(bidirectional, cell_type, depth,
             # print(reward_2)
             # print(p1q1.shape, p1q1l.shape, a.shape, al.shape)
 
+            # (a | qi, pi)
             forward_loss, _ = model_rl.entropy(
                 sess_rl, p1q1, p1q1l, a, al
             )
+            # (qi | a)
             backward_loss, _ = model_backward.entropy(
                 sess_backward, a, al, q1, q1l
             )
@@ -231,17 +246,25 @@ def test(bidirectional, cell_type, depth,
             # print('forward_loss.shape, backward_loss.shape', forward_loss.shape, backward_loss.shape)
 
             for i in range(forward_loss.shape[0]):
-                forward_loss[i,:] /= al[i]
+                forward_loss[i,:] /= al[i] + 1e-12
 
             for i in range(backward_loss.shape[0]):
-                backward_loss[i,:] /= q1l[i]
+                backward_loss[i,:] /= q1l[i] + 1e-12
 
             reward_3 = forward_loss + backward_loss
             reward_3 = np.nan_to_num(reward_3)
             reward_3[reward_3 == -np.inf] = 0
             reward_3[reward_3 == np.inf] = 0
+            reward_3 = np.sum(reward_3, axis=1)
 
             # print(reward_3.shape, reward_3)
+            # exit(0)
+
+            # reward_1 = sigmoid(reward_1)
+            # reward_2 = sigmoid(reward_2)
+            # reward_3 = sigmoid(reward_3)
+
+            # print(np.mean(reward_1), np.mean(reward_2), np.mean(reward_3))
 
             rewards = reward_1 * lambda_1 + reward_2 * lambda_2 + reward_3 * lambda_3
 
@@ -251,13 +274,14 @@ def test(bidirectional, cell_type, depth,
             # print('rewards.shape', rewards.shape)
 
             # +1 是因为 END 符号
-            rewards = rewards[:, :p2.shape[1] + 1]
+            # rewards = rewards[:, :p2.shape[1] + 1]
             rewards = np.nan_to_num(rewards)
             rewards[rewards == -np.inf] = 0
             rewards[rewards == np.inf] = 0
+            rewards = rewards.reshape(-1, 1)
 
-            rewards[rewards > 5] = 5
-            rewards[rewards < 0] = 0
+            # rewards[rewards > 5] = 5
+            # rewards[rewards < 0] = 0
 
             # print(rewards.shape, rewards)
             # exit(0)

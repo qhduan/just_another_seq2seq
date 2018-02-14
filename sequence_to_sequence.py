@@ -259,7 +259,7 @@ class SequenceToSequence(object):
             # 解码器输入的reward，用于强化学习训练，shape=(batch_size, time_step)
             self.rewards = tf.placeholder(
                 dtype=tf.float32,
-                shape=(self.batch_size, None),
+                shape=(self.batch_size, 1),
                 name='rewards'
             )
 
@@ -696,7 +696,7 @@ class SequenceToSequence(object):
                     labels=self.decoder_targets_train,
                     logits=decoder_logits_train)
                 self.train_entropy *= self.masks
-                self.train_entropy_rewards = self.train_entropy * self.rewards
+                self.train_entropy_rewards = tf.multiply(self.train_entropy, self.rewards)
                 self.train_entropy_rewards *= self.masks
 
                 # https://github.com/tensorflow/tensorflow/blob/r1.5/tensorflow/contrib/seq2seq/python/ops/loss.py
