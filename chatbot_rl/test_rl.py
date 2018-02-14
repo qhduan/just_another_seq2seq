@@ -32,8 +32,8 @@ def test(bidirectional, cell_type, depth,
     )
 
     # save_path = '/tmp/s2ss_chatbot.ckpt'
-    save_path = './s2ss_chatbot_forward.ckpt'
-    # save_path = './s2ss_chatbot_rl.ckpt'
+    # save_path = './s2ss_chatbot_forward.ckpt'
+    save_path = './s2ss_chatbot_rl.ckpt'
 
     # 测试部分
     tf.reset_default_graph()
@@ -59,11 +59,17 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
+        last = None
+
         while True:
             user_text = input('Input Chat Sentence:')
             if user_text in ('exit', 'quit'):
                 exit(0)
-            x_test = [list(user_text.lower())]
+            x_test = list(user_text.lower())
+            if last is not None and last:
+                print(last)
+                x_test = last + [WordSequence.PAD_TAG] + x_test
+            x_test = [x_test]
             bar = batch_flow(x_test, x_test, ws, ws, 1)
             x, xl, _, _ = next(bar)
             print(x, xl)
@@ -75,6 +81,14 @@ def test(bidirectional, cell_type, depth,
             print(pred)
             print(ws.inverse_transform(x[0]))
             print(ws.inverse_transform(pred[0]))
+            p = []
+            for pp in ws.inverse_transform(pred[0]):
+                if pp == WordSequence.END_TAG:
+                    break
+                if pp == WordSequence.PAD_TAG:
+                    break
+                p.append(pp)
+            last = p
 
 
 def main():

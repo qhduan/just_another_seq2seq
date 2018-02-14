@@ -32,6 +32,7 @@ def test(bidirectional, cell_type, depth,
         list('我们要去哪里？'),
         list('你什么都不知道'),
         list('你知道你知道'),
+        list('我知道你是谁'),
         list('你说什么？'),
         list('为什么？'),
         list('我不知道'),
@@ -51,6 +52,9 @@ def test(bidirectional, cell_type, depth,
         list('谁？'),
         list('好'),
         list('对'),
+        list('我'),
+        list('你'),
+        list('不'),
     ]
 
     p1_data, q1_data, p2_data, ws = pickle.load(
@@ -270,7 +274,7 @@ def test(bidirectional, cell_type, depth,
 
             rewards = reward_1 * lambda_1 + reward_2 * lambda_2 + reward_3 * lambda_3
 
-            rewards = sigmoid(rewards) * 1.1
+            rewards = sigmoid(rewards) * 2
 
             # gradually anneal the value of L to zero
             # rewards[:,:limit] = 1.0
