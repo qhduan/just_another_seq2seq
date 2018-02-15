@@ -189,7 +189,11 @@ def batch_flow_bucket_rl(p1_data, q1_data, p2_data, ws, batch_size, n_bucket=4):
         p2_len_batch = []
 
         for p1, q1, p2 in data_batch:
-            p1q1 = p1 + ['，'] + q1
+
+            if p1[-1] in ('。', '，', '？', '！', '。', '…', '.', ',', '?', '!', '~'):
+                p1q1 = p1 + q1
+            else:
+                p1q1 = p1 + ['，'] + q1
 
             x, xl = transform_sentence(p1, ws, p1_max)
             p1_batch.append(x)

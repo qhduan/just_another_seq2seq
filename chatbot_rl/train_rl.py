@@ -182,8 +182,8 @@ def test(bidirectional, cell_type, depth,
             al = np.array(al)
             a = np.array(a)
 
-            print([ws.inverse_transform(aa) for aa in p1q1])
-            print([ws.inverse_transform(aa) for aa in a])
+            # print([ws.inverse_transform(aa) for aa in p1q1])
+            # print([ws.inverse_transform(aa) for aa in a])
 
             # Ease of answering
             reward_1_s = None
