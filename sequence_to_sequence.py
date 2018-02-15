@@ -158,6 +158,11 @@ class SequenceToSequence(object):
         self.seed = seed
         self.parallel_iterations = parallel_iterations
         self.time_major = time_major
+        # Initialize encoder_embeddings to have variance=1.
+        sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
+        self.initializer = tf.random_uniform_initializer(
+            -sqrt3, sqrt3, dtype=tf.float32
+        )
 
         assert mode in ('train', 'decode'), \
             'mode 必须是 "train" 或 "decode" 而不是 "{}"'.format(mode)
@@ -340,18 +345,12 @@ class SequenceToSequence(object):
             # 构建 encoder_cell
             self.encoder_cell = self.build_encoder_cell()
 
-            # Initialize encoder_embeddings to have variance=1.
-            sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
-            initializer = tf.random_uniform_initializer(
-                -sqrt3, sqrt3, dtype=tf.float32
-            )
-
             # 编码器的embedding
             with tf.device(_get_embed_device(self.input_vocab_size)):
                 self.encoder_embeddings = tf.get_variable(
                     name='embedding',
                     shape=(self.input_vocab_size, self.embedding_size),
-                    initializer=initializer,
+                    initializer=self.initializer,
                     dtype=tf.float32
                 )
 
@@ -560,18 +559,12 @@ class SequenceToSequence(object):
                 self.decoder_initial_state
             ) = self.build_decoder_cell()
 
-            # Initialize decoder embeddings to have variance=1.
-            sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
-            initializer = tf.random_uniform_initializer(
-                -sqrt3, sqrt3, dtype=tf.float32
-            )
-
             # 解码器embedding
             with tf.device(_get_embed_device(self.target_vocab_size)):
                 self.decoder_embeddings = tf.get_variable(
                     name='embeddings',
                     shape=(self.target_vocab_size, self.embedding_size),
-                    initializer=initializer,
+                    initializer=self.initializer,
                     dtype=tf.float32
                 )
 

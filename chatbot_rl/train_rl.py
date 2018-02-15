@@ -62,7 +62,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 256
+    batch_size = 4
     padding_size = 20
     limit = 8
     lambda_1 = 0.25
@@ -199,10 +199,8 @@ def test(bidirectional, cell_type, depth,
                 reward_1_s.append(reward_1)
             reward_1_s = np.array(reward_1_s)
             reward_1 = np.sum(np.mean(reward_1_s, axis=0), axis=1)
-            reward_1 = np.nan_to_num(reward_1)
-            reward_1[reward_1 == -np.inf] = 0
-            reward_1[reward_1 == np.inf] = 0
-            # print(reward_1.shape, reward_1)
+
+            # print('reward_1.shape, reward_1', reward_1.shape, reward_1)
 
             # Information Flow
             # shape = (batch_size, time_step, embedding_size)
@@ -216,17 +214,17 @@ def test(bidirectional, cell_type, depth,
                             ((0, 0), (0, padding_size - emb_p2.shape[1]), (0, 0)),
                             'constant', constant_values=0)
 
-            # print('emb_p1.shape, emb_p2.shape', emb_p1.shape, emb_p2.shape)
-            reward_2 = np.sum(emb_p1 * emb_p2, axis=(1, 2)) / (
-                np.sqrt(np.sum(emb_p1 ** 2)) * np.sqrt(np.sum(emb_p2 ** 2)) \
-                + 1e-12
-            )
+            def cos_distance(a, b):
+                return np.sum(a * b) / (
+                    np.sqrt(np.sum(a ** 2)) * np.sqrt(np.sum(b ** 2)))
+
+            reward_2 = np.array([
+                (1 + cos_distance(emb_p1[i], emb_p2[i])) / 2
+                for i in range(batch_size)
+            ])
             reward_2 = -np.log(reward_2 + 1e-12)
-            # reward_2 /= batch_size
-            reward_2 = np.nan_to_num(reward_2)
-            reward_2[reward_2 == -np.inf] = 0
-            reward_2[reward_2 == np.inf] = 0
-            # print(reward_2.shape, reward_2)
+
+            # print('reward_2.shape, reward_2', reward_2.shape, reward_2)
 
             # print('reward_2.shape', reward_2.shape)
             # print(reward_2)
@@ -258,12 +256,9 @@ def test(bidirectional, cell_type, depth,
                 backward_loss[i,:] /= q1l[i]
 
             reward_3 = forward_loss + backward_loss
-            reward_3 = np.nan_to_num(reward_3)
-            reward_3[reward_3 == -np.inf] = 0
-            reward_3[reward_3 == np.inf] = 0
-            reward_3 = np.sum(reward_3, axis=1)
+            reward_3 = np.sum(reward_3, axis=1) / 2.0
 
-            # print(reward_3.shape, reward_3)
+            # print('reward_3.shape, reward_3', reward_3.shape, reward_3)
             # exit(0)
 
             # reward_1 = sigmoid(reward_1)
@@ -274,7 +269,7 @@ def test(bidirectional, cell_type, depth,
 
             rewards = reward_1 * lambda_1 + reward_2 * lambda_2 + reward_3 * lambda_3
 
-            rewards = sigmoid(rewards) * 1.1
+            # rewards = sigmoid(rewards) * 1.1
 
             # gradually anneal the value of L to zero
             # rewards[:,:limit] = 1.0
@@ -284,14 +279,14 @@ def test(bidirectional, cell_type, depth,
             # +1 是因为 END 符号
             # rewards = rewards[:, :p2.shape[1] + 1]
             rewards = np.nan_to_num(rewards)
-            rewards[rewards == -np.inf] = 0
-            rewards[rewards == np.inf] = 0
+            rewards[rewards < 0] = 0
+            rewards[rewards > 5] = 5
             rewards = rewards.reshape(-1, 1)
 
             # rewards[rewards > 5] = 5
             # rewards[rewards < 0] = 0
 
-            # print(rewards.shape, rewards)
+            # print('rewards.shape, rewards', rewards.shape, rewards)
             # exit(0)
 
             # print('rewards.shape', rewards.shape, rewards)

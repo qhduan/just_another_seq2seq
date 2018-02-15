@@ -5,6 +5,8 @@
 
 Paper: [Deep Reinforcement Learning for Dialogue Generation](https://arxiv.org/abs/1606.01541)
 
+这个Paper应该修订版在[这里](https://aclweb.org/anthology/D16-1127)
+
 Other Example:
 
 https://github.com/Marsan-Ma/tf_chatbot_seq2seq_antilm/blob/master/lib/seq2seq_model.py
