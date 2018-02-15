@@ -62,7 +62,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 4
+    batch_size = 512
     padding_size = 20
     limit = 8
     lambda_1 = 0.25
