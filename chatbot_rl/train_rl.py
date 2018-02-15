@@ -39,6 +39,7 @@ def test(bidirectional, cell_type, depth,
         list('我很抱歉'),
         list('我知道了'),
         list('不喜欢'),
+        list('是好的'),
         list('是的'),
         list('不是'),
         list('我不'),
@@ -49,8 +50,14 @@ def test(bidirectional, cell_type, depth,
         list('我想'),
         list('什么'),
         list('不好'),
+        list('我的'),
+        list('我吧'),
         list('谁？'),
+        list('是吗'),
+        list('等等'),
+        list('谢谢'),
         list('好'),
+        list('是'),
         list('对'),
         list('我'),
         list('你'),
@@ -63,7 +70,6 @@ def test(bidirectional, cell_type, depth,
     # 训练部分
     n_epoch = 20
     batch_size = 512
-    padding_size = 20
     limit = 8
     lambda_1 = 0.25
     lambda_2 = 0.25
@@ -156,7 +162,6 @@ def test(bidirectional, cell_type, depth,
             _, a = model_rl.entropy(
                 sess_rl, p1q1, p1q1l, p2, p2l
             )
-            # print('a.shape', a.shape, a)
 
             al = []
             new_a = []
@@ -176,12 +181,12 @@ def test(bidirectional, cell_type, depth,
                 a.append(aa)
             al = np.array(al)
             a = np.array(a)
-            # print('al', al)
-            # print('a', a)
+
+            print([ws.inverse_transform(aa) for aa in p1q1])
+            print([ws.inverse_transform(aa) for aa in a])
 
             # Ease of answering
-
-            reward_1_s = []
+            reward_1_s = None
             for dull in dull_data:
                 dull_flow = batch_flow([dull], [dull], ws, ws, 1)
                 d, dl, _, _ = next(dull_flow)
@@ -191,28 +196,29 @@ def test(bidirectional, cell_type, depth,
                 reward_1, _ = model_rl.entropy(
                     sess_rl, a, al, d, dl
                 )
-                # reward_1 = -reward_1
-                reward_1 = np.pad(reward_1,
-                                  ((0, 0), (0, padding_size - reward_1.shape[1])),
-                                  'constant', constant_values=0)
+
+                reward_1 = np.sum(reward_1, axis=1)
                 reward_1 *= -1.0 / len(dull)
-                reward_1_s.append(reward_1)
+                if reward_1_s is None:
+                    reward_1_s = reward_1
+                else:
+                    reward_1_s += reward_1
+
             reward_1_s = np.array(reward_1_s)
-            reward_1 = np.sum(np.mean(reward_1_s, axis=0), axis=1)
+            reward_1 = reward_1_s / len(dull_data)
 
             # print('reward_1.shape, reward_1', reward_1.shape, reward_1)
+            # exit(0)
 
             # Information Flow
             # shape = (batch_size, time_step, embedding_size)
             emb_p1 = model_rl.get_encoder_embedding(sess_rl, p1)
             emb_p2 = model_rl.get_encoder_embedding(sess_rl, p2)
 
-            emb_p1 = np.pad(emb_p1,
-                            ((0, 0), (0, padding_size - emb_p1.shape[1]), (0, 0)),
-                            'constant', constant_values=0)
-            emb_p2 = np.pad(emb_p2,
-                            ((0, 0), (0, padding_size - emb_p2.shape[1]), (0, 0)),
-                            'constant', constant_values=0)
+            shrink_size = min(emb_p1.shape[1], emb_p2.shape[1])
+
+            emb_p1 = emb_p1[:, :shrink_size, :]
+            emb_p2 = emb_p2[:, :shrink_size, :]
 
             def cos_distance(a, b):
                 return np.sum(a * b) / (
@@ -226,10 +232,6 @@ def test(bidirectional, cell_type, depth,
 
             # print('reward_2.shape, reward_2', reward_2.shape, reward_2)
 
-            # print('reward_2.shape', reward_2.shape)
-            # print(reward_2)
-            # print(p1q1.shape, p1q1l.shape, a.shape, al.shape)
-
             # (a | qi, pi)
             forward_loss, _ = model_rl.entropy(
                 sess_rl, p1q1, p1q1l, a, al
@@ -239,59 +241,19 @@ def test(bidirectional, cell_type, depth,
                 sess_backward, a, al, q1, q1l
             )
 
-            forward_loss = np.pad(forward_loss,
-                                  ((0, 0), (0, padding_size - forward_loss.shape[1])),
-                                  'constant', constant_values=0)
-
-            backward_loss = np.pad(backward_loss,
-                                  ((0, 0), (0, padding_size - backward_loss.shape[1])),
-                                  'constant', constant_values=0)
-
-            # print('forward_loss.shape, backward_loss.shape', forward_loss.shape, backward_loss.shape)
-
-            for i in range(forward_loss.shape[0]):
-                forward_loss[i,:] /= al[i]
-
-            for i in range(backward_loss.shape[0]):
-                backward_loss[i,:] /= q1l[i]
-
+            forward_loss = np.sum(forward_loss, axis=1) / al
+            backward_loss = np.sum(backward_loss, axis=1) / q1l
             reward_3 = forward_loss + backward_loss
-            reward_3 = np.sum(reward_3, axis=1)
 
             # print('reward_3.shape, reward_3', reward_3.shape, reward_3)
             # exit(0)
 
-            # reward_1 = sigmoid(reward_1)
-            # reward_2 = sigmoid(reward_2)
-            # reward_3 = sigmoid(reward_3)
-
-            # print(np.mean(reward_1), np.mean(reward_2), np.mean(reward_3))
-
             rewards = reward_1 * lambda_1 + reward_2 * lambda_2 + reward_3 * lambda_3
-
-            # rewards = sigmoid(rewards) * 1.1
-
-            # gradually anneal the value of L to zero
-            # rewards[:,:limit] = 1.0
-
             # print('rewards.shape', rewards.shape)
-
-            # +1 是因为 END 符号
-            # rewards = rewards[:, :p2.shape[1] + 1]
             rewards = np.nan_to_num(rewards)
             rewards[rewards < 0] = 0
-            rewards[rewards > 5] = 5
+            rewards[rewards > 10] = 10
             rewards = rewards.reshape(-1, 1)
-
-            # rewards[rewards > 5] = 5
-            # rewards[rewards < 0] = 0
-
-            # print('rewards.shape, rewards', rewards.shape, rewards)
-            # exit(0)
-
-            # print('rewards.shape', rewards.shape, rewards)
-            #
-            # print('q1.shape, q1l.shape, p2.shape, p2l.shape', q1.shape, q1l.shape, p2.shape, p2l.shape)
 
             cost = model_rl.train(sess_rl, p1q1, p1q1l, p2, p2l, rewards)
 
