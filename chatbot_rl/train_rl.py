@@ -274,7 +274,7 @@ def test(bidirectional, cell_type, depth,
 
             rewards = reward_1 * lambda_1 + reward_2 * lambda_2 + reward_3 * lambda_3
 
-            rewards = sigmoid(rewards) * 2
+            rewards = sigmoid(rewards) * 1.1
 
             # gradually anneal the value of L to zero
             # rewards[:,:limit] = 1.0
