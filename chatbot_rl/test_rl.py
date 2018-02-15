@@ -32,63 +32,93 @@ def test(bidirectional, cell_type, depth,
     )
 
     # save_path = '/tmp/s2ss_chatbot.ckpt'
-    # save_path = './s2ss_chatbot_forward.ckpt'
-    save_path = './s2ss_chatbot_rl.ckpt'
+    save_path = './s2ss_chatbot_forward.ckpt'
+    save_path_rl = './s2ss_chatbot_rl.ckpt'
+
+    graph = tf.Graph()
+    graph_rl = tf.Graph()
 
     # 测试部分
-    tf.reset_default_graph()
-    model_pred = SequenceToSequence(
-        input_vocab_size=len(ws),
-        target_vocab_size=len(ws),
-        batch_size=1,
-        mode='decode',
-        beam_width=0,
-        bidirectional=bidirectional,
-        cell_type=cell_type,
-        depth=depth,
-        attention_type=attention_type,
-        use_residual=use_residual,
-        use_dropout=use_dropout,
-        parallel_iterations=1,
-        time_major=time_major,
-        hidden_units=hidden_units # for test
-    )
-    init = tf.global_variables_initializer()
-
-    with tf.Session(config=config) as sess:
+    with graph.as_default():
+        model_pred = SequenceToSequence(
+            input_vocab_size=len(ws),
+            target_vocab_size=len(ws),
+            batch_size=1,
+            mode='decode',
+            beam_width=0,
+            bidirectional=bidirectional,
+            cell_type=cell_type,
+            depth=depth,
+            attention_type=attention_type,
+            use_residual=use_residual,
+            use_dropout=use_dropout,
+            parallel_iterations=1,
+            time_major=time_major,
+            hidden_units=hidden_units # for test
+        )
+        init = tf.global_variables_initializer()
+        sess = tf.Session(config=config)
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        last = None
+    with graph_rl.as_default():
+        model_rl = SequenceToSequence(
+            input_vocab_size=len(ws),
+            target_vocab_size=len(ws),
+            batch_size=1,
+            mode='decode',
+            beam_width=0,
+            bidirectional=bidirectional,
+            cell_type=cell_type,
+            depth=depth,
+            attention_type=attention_type,
+            use_residual=use_residual,
+            use_dropout=use_dropout,
+            parallel_iterations=1,
+            time_major=time_major,
+            hidden_units=hidden_units # for test
+        )
+        init = tf.global_variables_initializer()
+        sess_rl = tf.Session(config=config)
+        sess_rl.run(init)
+        model_rl.load(sess, save_path_rl)
 
-        while True:
-            user_text = input('Input Chat Sentence:')
-            if user_text in ('exit', 'quit'):
-                exit(0)
-            x_test = list(user_text.lower())
-            if last is not None and last:
-                print(last)
-                x_test = last + [WordSequence.PAD_TAG] + x_test
-            x_test = [x_test]
-            bar = batch_flow(x_test, x_test, ws, ws, 1)
-            x, xl, _, _ = next(bar)
-            print(x, xl)
-            pred = model_pred.predict(
-                sess,
-                np.array(x),
-                np.array(xl)
-            )
-            print(pred)
-            print(ws.inverse_transform(x[0]))
-            print(ws.inverse_transform(pred[0]))
-            p = []
-            for pp in ws.inverse_transform(pred[0]):
-                if pp == WordSequence.END_TAG:
-                    break
-                if pp == WordSequence.PAD_TAG:
-                    break
-                p.append(pp)
-            last = p
+
+    last = None
+
+    while True:
+        user_text = input('Input Chat Sentence:')
+        if user_text in ('exit', 'quit'):
+            exit(0)
+        x_test = list(user_text.lower())
+        # if last is not None and last:
+        #     print(last)
+        #     x_test = last + [WordSequence.PAD_TAG] + x_test
+        x_test = [x_test]
+        bar = batch_flow(x_test, x_test, ws, ws, 1)
+        x, xl, _, _ = next(bar)
+        print(x, xl)
+        pred = model_pred.predict(
+            sess,
+            np.array(x),
+            np.array(xl)
+        )
+        pred_rl = model_pred.predict(
+            sess,
+            np.array(x),
+            np.array(xl)
+        )
+        print(ws.inverse_transform(x[0]))
+        print('no:', ws.inverse_transform(pred[0]))
+        print('rl:', ws.inverse_transform(pred_rl[0]))
+        p = []
+        for pp in ws.inverse_transform(pred_rl[0]):
+            if pp == WordSequence.END_TAG:
+                break
+            if pp == WordSequence.PAD_TAG:
+                break
+            p.append(pp)
+        last = p
 
 
 def main():

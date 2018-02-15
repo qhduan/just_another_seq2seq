@@ -61,7 +61,7 @@ def test(bidirectional, cell_type, depth,
         open('chatbot_rl.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
+    n_epoch = 20
     batch_size = 512
     padding_size = 20
     limit = 8
@@ -256,7 +256,7 @@ def test(bidirectional, cell_type, depth,
                 backward_loss[i,:] /= q1l[i]
 
             reward_3 = forward_loss + backward_loss
-            reward_3 = np.sum(reward_3, axis=1) / 2.0
+            reward_3 = np.sum(reward_3, axis=1)
 
             # print('reward_3.shape, reward_3', reward_3.shape, reward_3)
             # exit(0)
@@ -297,7 +297,7 @@ def test(bidirectional, cell_type, depth,
 
             costs.append(cost)
             lengths.append(np.mean(al))
-            bar.set_description('epoch {} loss={:.6f} {:.4f} {:.4f} {:.4f} {:.4f} {:.4f}'.format(
+            bar.set_description('epoch {} loss={:.6f} c={:.4f} r1={:.4f} r2={:.4f} r3={:.4f} rs={:.4f}'.format(
                 epoch,
                 np.mean(costs),
                 np.mean(lengths),
