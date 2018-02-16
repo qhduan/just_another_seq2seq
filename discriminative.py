@@ -266,7 +266,8 @@ class Discriminative(object):
             if self.bidirectional:
                 hidden_units *= 2
 
-            self.logits = tf.layers.dense(output_x + output_en, units=2)
+            l = tf.concat((output_x, output_en), 1)
+            self.logits = tf.layers.dense(, units=2)
 
             self.outputs = tf.nn.softmax(self.logits)
 
