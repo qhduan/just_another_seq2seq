@@ -18,7 +18,8 @@ def sigmoid(x):
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major, hidden_units):
+         attention_type, use_residual, use_dropout, time_major, hidden_units,
+         preload=True):
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
@@ -56,6 +57,7 @@ def test(bidirectional, cell_type, depth,
         list('是吗'),
         list('等等'),
         list('谢谢'),
+        list('好的'),
         list('好'),
         list('是'),
         list('对'),
@@ -143,7 +145,8 @@ def test(bidirectional, cell_type, depth,
         )
         init = tf.global_variables_initializer()
         sess_rl.run(init)
-        model_rl.load(sess_rl, forward_path)
+        if preload:
+            model_rl.load(sess_rl, forward_path)
 
     # 开始训练
     flow = batch_flow_bucket_rl(
@@ -253,6 +256,7 @@ def test(bidirectional, cell_type, depth,
             rewards = np.nan_to_num(rewards)
             rewards[rewards < 0] = 0
             rewards[rewards > 10] = 10
+            rewards = rewards / 5
             rewards = rewards.reshape(-1, 1)
 
             cost = model_rl.train(sess_rl, p1q1, p1q1l, p2, p2l, rewards)
