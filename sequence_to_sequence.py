@@ -863,28 +863,12 @@ class SequenceToSequence(object):
 
     def save(self, sess, save_path='model.ckpt'):
         """保存模型"""
-
-        # if not os.path.exists(save_path):
-        #     os.makedirs(save_path)
-
-        # saver = tf.train.Saver()
-        self.saver.save(sess,
-                        save_path=save_path) #,
-                               # global_step=self.global_step)
+        self.saver.save(sess, save_path=save_path)
 
 
     def load(self, sess, save_path='model.ckpt'):
         """读取模型"""
-        # if not os.path.exists(save_path):
-        #     print('没有找到模型路径', save_path)
-        #     return
-
         print('try load model from', save_path)
-        # ckpt = tf.train.get_checkpoint_state(save_path)
-        # saver = tf.train.Saver()
-        # saver = tf.train.import_meta_graph(save_path)
-        # saver.restore(sess, save_path=ckpt.model_checkpoint_path)
-        # saver = tf.train.import_meta_graph(save_path + '.meta')
         self.saver.restore(sess, save_path)
 
 
