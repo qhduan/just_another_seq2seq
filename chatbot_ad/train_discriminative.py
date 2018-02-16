@@ -31,11 +31,11 @@ def test(bidirectional, cell_type, depth,
     batch_size = 512
     steps = int(len(x_data) / batch_size) + 1
 
-    # config = tf.ConfigProto(
-    #     device_count={'CPU': 1, 'GPU': 0},
-    #     allow_soft_placement=True,
-    #     log_device_placement=False
-    # )
+    config = tf.ConfigProto(
+        # device_count={'CPU': 1, 'GPU': 0},
+        allow_soft_placement=True,
+        log_device_placement=False
+    )
 
     # save_path = '/tmp/s2ss_chatbot.ckpt'
     save_path = './s2ss_chatbot_discriminative.ckpt'
