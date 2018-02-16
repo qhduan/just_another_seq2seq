@@ -89,23 +89,23 @@ def batch_flow_bucket(x_data, y_data, ws_q, ws_a, batch_size, n_bucket=4):
     if n_bucket > len(sizes):
         n_bucket = len(sizes)
     buckets = (np.linspace(0, 1, n_bucket, endpoint=False) * len(sizes)).astype(int)
-    buckets = [sizes[i] for i in buckets]
+    buckets = [sizes[i] for i in buckets] = [np.inf]
     print('buckets', buckets)
 
     sizes_data = {}
     for i, k in enumerate(buckets):
-        if i > 0:
-            low = buckets[i - 1]
+        if i < len(buckets) - 1:
+            up = buckets[i + 1]
             v = [(x, y) for x, y in zip(x_data, y_data)
-                 if len(y) > low and len(y) <= k]
+                 if len(y) >= k and len(y) < up]
             if len(v) >= batch_size:
                 sizes_data[k] = v
             # while len(sizes_data[k]) < batch_size:
             #     sizes_data[k] = sizes_data[k] + sizes_data[k]
     sizes = sorted(list(sizes_data.keys()))
-    print('sizes', buckets)
+    print('sizes', tuple(sizes))
 
-    assert tuple(buckets[1:]) == tuple(sizes), \
+    assert tuple(buckets) == tuple(sizes), \
         '{} != {}'.format(buckets, sizes)
     assert len(sizes) == n_bucket
 
