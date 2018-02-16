@@ -59,17 +59,17 @@ def test(bidirectional, cell_type, depth,
 
         model_d = Discriminative(
             input_vocab_size=len(ws),
-            batch_size=batch_size,
-            learning_rate=0.01,
-            bidirectional=bidirectional,
+            batch_size=batch_size * 2,
+            learning_rate=0.001,
+            bidirectional=False,
             cell_type=cell_type,
-            depth=depth,
-            use_residual=use_residual,
-            use_dropout=use_dropout,
+            depth=1,
+            use_residual=False,
+            use_dropout=False,
             parallel_iterations=32,
+            time_major=time_major,
             hidden_units=hidden_units,
-            optimizer='adadelta',
-            time_major=time_major
+            optimizer='adadelta'
         )
         init = tf.global_variables_initializer()
         sess_d.run(init)
