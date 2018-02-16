@@ -95,9 +95,10 @@ def batch_flow_bucket(x_data, y_data, ws_q, ws_a, batch_size, n_bucket=4):
             low = buckets[i - 1]
             v = [(x, y) for x, y in zip(x_data, y_data)
                  if len(y) > low and len(y) < k]
-            sizes_data[k] = v
-            while len(sizes_data[k]) < batch_size:
-                sizes_data[k] = sizes_data[k] + sizes_data[k]
+            if len(v) >= batch_size:
+                sizes_data[k] = v
+            # while len(sizes_data[k]) < batch_size:
+            #     sizes_data[k] = sizes_data[k] + sizes_data[k]
     sizes = sorted(list(sizes_data.keys()))
     # print('sizes', buckets)
 
