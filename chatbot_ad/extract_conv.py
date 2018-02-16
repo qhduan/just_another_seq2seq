@@ -23,7 +23,7 @@ def good_line(line):
     return True
 
 
-def main(limit=15):
+def main(limit=15, min_limit=5):
     """执行程序
     Args:
         limit: 只输出句子长度小于limit的句子
@@ -88,7 +88,9 @@ def main(limit=15):
         print('-' * 20)
 
     data = list(zip(x_data, y_data))
-    data = [(x, y) for x, y in data if len(x) < limit and len(y) < limit]
+    data = [
+        (x, y) for x, y in data
+        if len(x) < limit and len(y) < limit and len(y) >= min_limit]
     x_data, y_data = zip(*data)
 
     print('fit word_sequence')
