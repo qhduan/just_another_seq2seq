@@ -86,7 +86,7 @@ def batch_flow_bucket(x_data, y_data, ws_q, ws_a, batch_size, n_bucket=4):
     每个batch不会出现不同组的长度
     """
     sizes = sorted(list(set([len(y) for y in y_data])))
-    if len(n_bucket) > len(sizes):
+    if n_bucket > len(sizes):
         n_bucket = len(sizes)
     buckets = (np.linspace(0, 1, n_bucket, endpoint=False) * len(sizes)).astype(int)
     buckets = [sizes[i] for i in buckets]
