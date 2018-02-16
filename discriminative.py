@@ -268,6 +268,7 @@ class Discriminative(object):
 
             l = tf.concat((output_x, output_en), 1)
             self.logits = tf.layers.dense(l, units=2)
+            self.logits = tf.layers.batch_norm(self.logits)
 
             self.outputs = tf.nn.softmax(self.logits)
 

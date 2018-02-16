@@ -64,10 +64,10 @@ def test(bidirectional, cell_type, depth,
             bidirectional=False,
             cell_type=cell_type,
             depth=1,
-            use_residual=True,
+            use_residual=False,
             use_dropout=False,
             parallel_iterations=32,
-            time_major=time_major,
+            time_major=False,
             hidden_units=hidden_units,
             optimizer='adam'
         )

@@ -80,7 +80,7 @@ def test(bidirectional, cell_type, depth,
             use_residual=True,
             use_dropout=False,
             parallel_iterations=32,
-            time_major=time_major,
+            time_major=False,
             hidden_units=hidden_units,
             optimizer='adam'
         )
