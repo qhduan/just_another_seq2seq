@@ -267,7 +267,7 @@ class Discriminative(object):
                 hidden_units *= 2
 
             l = tf.concat((output_x, output_en), 1)
-            self.logits = tf.layers.dense(, units=2)
+            self.logits = tf.layers.dense(l, units=2)
 
             self.outputs = tf.nn.softmax(self.logits)
 
