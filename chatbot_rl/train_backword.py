@@ -58,7 +58,7 @@ def test(bidirectional, cell_type, depth,
                 use_dropout=use_dropout,
                 parallel_iterations=64,
                 hidden_units=hidden_units,
-                optimizer='momentum',
+                optimizer='sgd',
                 time_major=time_major
             )
             init = tf.global_variables_initializer()
