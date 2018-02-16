@@ -5,6 +5,7 @@ import re
 import sys
 import pickle
 from tqdm import tqdm
+import jieba
 
 sys.path.append('..')
 
@@ -32,7 +33,7 @@ def main(limit=15):
             line = line.replace('\n', '')
             line = line[2:].split('/')
             line = line[:-1]
-            group.append(line)
+            group.append(jieba.lcut(''.join(line).replace(' ', '')))
         else: # if line.startswith('E'):
             last_line = None
             if group:

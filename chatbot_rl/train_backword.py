@@ -49,7 +49,7 @@ def test(bidirectional, cell_type, depth,
                 input_vocab_size=len(ws),
                 target_vocab_size=len(ws),
                 batch_size=batch_size,
-                learning_rate=0.001,
+                learning_rate=0.01,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
@@ -76,6 +76,10 @@ def test(bidirectional, cell_type, depth,
                     _, _, q1, q1l, _, _, p2, p2l = next(flow)
                     # cost = model.train(sess, x, xl, y, yl)
                     # train backward
+                    # print(p2)
+                    # print(ws.inverse_transform(p2[0]))
+                    # print(q1)
+                    # print(ws.inverse_transform(q1[0]))
                     cost = model.train(sess, p2, p2l, q1, q1l)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f}'.format(

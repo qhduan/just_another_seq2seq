@@ -8,6 +8,7 @@ import pickle
 
 import numpy as np
 import tensorflow as tf
+import jieba
 
 sys.path.append('..')
 
@@ -45,7 +46,7 @@ def test(bidirectional, cell_type, depth,
             target_vocab_size=len(ws),
             batch_size=1,
             mode='decode',
-            beam_width=0,
+            beam_width=12,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -67,7 +68,7 @@ def test(bidirectional, cell_type, depth,
             target_vocab_size=len(ws),
             batch_size=1,
             mode='decode',
-            beam_width=0,
+            beam_width=12,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -90,7 +91,7 @@ def test(bidirectional, cell_type, depth,
         user_text = input('Input Chat Sentence:')
         if user_text in ('exit', 'quit'):
             exit(0)
-        x_test = list(user_text.lower())
+        x_test = jieba.lcut(user_text.lower())
         # if last is not None and last:
         #     print(last)
         #     x_test = last + [WordSequence.PAD_TAG] + x_test

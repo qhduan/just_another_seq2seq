@@ -9,6 +9,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
+import jieba
 
 sys.path.append('..')
 
@@ -28,55 +29,65 @@ def test(bidirectional, cell_type, depth,
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
     dull_data = [
-        list('我不知道你在说什么'),
-        list('你知道我的意思'),
-        list('我们要去哪里？'),
-        list('你什么都不知道'),
-        list('你知道你知道'),
-        list('我知道你是谁'),
-        list('你说什么？'),
-        list('为什么？'),
-        list('我不知道'),
-        list('我很抱歉'),
-        list('我知道了'),
-        list('不喜欢'),
-        list('是好的'),
-        list('是的'),
-        list('不是'),
-        list('我不'),
-        list('好的'),
-        list('什么'),
-        list('没有'),
-        list('喜欢'),
-        list('我想'),
-        list('什么'),
-        list('不好'),
-        list('我的'),
-        list('我吧'),
-        list('谁？'),
-        list('是吗'),
-        list('等等'),
-        list('谢谢'),
-        list('好的'),
-        list('好'),
-        list('是'),
-        list('对'),
-        list('我'),
-        list('你'),
-        list('不'),
+        '我不知道你在说什么',
+        '你知道我的意思',
+        '我们要去哪里？',
+        '你什么都不知道',
+        '你知道你知道',
+        '我知道你是谁',
+        '你说什么？',
+        '为什么？',
+        '我不知道',
+        '我很抱歉',
+        '我知道了',
+        '不喜欢',
+        '是好的',
+        '是的',
+        '不是',
+        '我不',
+        '好的',
+        '什么',
+        '没有',
+        '喜欢',
+        '我想',
+        '什么',
+        '不好',
+        '我的',
+        '我吧',
+        '谁？',
+        '是吗',
+        '等等',
+        '谢谢',
+        '好的',
+        '好',
+        '是',
+        '对',
+        '我',
+        '你',
+        '不',
     ]
+
+    dull_data = [jieba.lcut(x) for x in dull_data]
 
     p1_data, q1_data, p2_data, ws = pickle.load(
         open('chatbot_rl.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 20
+    n_epoch = 10
     batch_size = 512
     limit = 8
     lambda_1 = 0.25
     lambda_2 = 0.25
     lambda_3 = 0.5
     steps = int(len(p1_data) / batch_size) + 1
+
+    dull_flow = []
+    for dull in dull_data:
+        d, dl, _, _ = next(batch_flow([dull], [dull], ws, ws, 1))
+        dull_flow.append((
+            np.array(d.tolist() * batch_size),
+            np.array(dl.tolist() * batch_size)
+        ))
 
     config = tf.ConfigProto(
         # device_count={'CPU': 1, 'GPU': 0},
@@ -103,7 +114,7 @@ def test(bidirectional, cell_type, depth,
             input_vocab_size=len(ws),
             target_vocab_size=len(ws),
             batch_size=batch_size,
-            learning_rate=0.001,
+            learning_rate=0.01,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -131,7 +142,7 @@ def test(bidirectional, cell_type, depth,
             input_vocab_size=len(ws),
             target_vocab_size=len(ws),
             batch_size=batch_size,
-            learning_rate=0.001,
+            learning_rate=0.01,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -190,25 +201,22 @@ def test(bidirectional, cell_type, depth,
 
             # Ease of answering
             reward_1_s = None
-            for dull in dull_data:
-                dull_flow = batch_flow([dull], [dull], ws, ws, 1)
-                d, dl, _, _ = next(dull_flow)
-                d = np.array(d.tolist() * batch_size)
-                dl = np.array(dl.tolist() * batch_size)
+
+            for d, dl in dull_flow:
 
                 reward_1, _ = model_rl.entropy(
                     sess_rl, a, al, d, dl
                 )
 
                 reward_1 = np.sum(reward_1, axis=1)
-                reward_1 *= -1.0 / len(dull)
+                reward_1 *= -1.0 / len(d)
                 if reward_1_s is None:
                     reward_1_s = reward_1
                 else:
                     reward_1_s += reward_1
 
             reward_1_s = np.array(reward_1_s)
-            reward_1 = reward_1_s / len(dull_data)
+            reward_1 = reward_1_s / len(dull_flow)
 
             # print('reward_1.shape, reward_1', reward_1.shape, reward_1)
             # exit(0)
@@ -251,7 +259,9 @@ def test(bidirectional, cell_type, depth,
             # print('reward_3.shape, reward_3', reward_3.shape, reward_3)
             # exit(0)
 
-            rewards = reward_1 * lambda_1 + reward_2 * lambda_2 + reward_3 * lambda_3
+            rewards = reward_1 * lambda_1 \
+                + reward_2 * lambda_2 \
+                + reward_3 * lambda_3
             # print('rewards.shape', rewards.shape)
             rewards = np.nan_to_num(rewards)
             rewards[rewards < 0] = 0

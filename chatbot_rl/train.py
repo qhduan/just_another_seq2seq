@@ -49,7 +49,7 @@ def test(bidirectional, cell_type, depth,
                 input_vocab_size=len(ws),
                 target_vocab_size=len(ws),
                 batch_size=batch_size,
-                learning_rate=0.001,
+                learning_rate=0.01,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
@@ -58,7 +58,7 @@ def test(bidirectional, cell_type, depth,
                 use_dropout=use_dropout,
                 parallel_iterations=64,
                 hidden_units=hidden_units,
-                optimizer='adam',
+                optimizer='momentum',
                 time_major=time_major
             )
             init = tf.global_variables_initializer()
@@ -74,6 +74,10 @@ def test(bidirectional, cell_type, depth,
                            desc='epoch {}, loss=0.000000'.format(epoch))
                 for _ in bar:
                     _, _, _, _, p1q1, p1q1l, p2, p2l = next(flow)
+                    # print(p1q1)
+                    # print(p2)
+                    # print(ws.inverse_transform(p1q1[0]))
+                    # print(ws.inverse_transform(p2[0]))
                     cost = model.train(sess, p1q1, p1q1l, p2, p2l)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f}'.format(
