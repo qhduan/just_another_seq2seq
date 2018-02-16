@@ -28,7 +28,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 512
+    batch_size = 64
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(

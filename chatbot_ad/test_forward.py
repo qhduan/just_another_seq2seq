@@ -32,7 +32,7 @@ def test(bidirectional, cell_type, depth,
     )
 
     # save_path = '/tmp/s2ss_chatbot.ckpt'
-    save_path = '/tmp/s2ss_chatbot_forward.ckpt'
+    save_path = './s2ss_chatbot_forward.ckpt'
 
     # 测试部分
     tf.reset_default_graph()
