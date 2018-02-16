@@ -95,8 +95,8 @@ def test(bidirectional, cell_type, depth,
         #     print(last)
         #     x_test = last + [WordSequence.PAD_TAG] + x_test
         x_test = [x_test]
-        bar = batch_flow(x_test, x_test, ws, ws, 1)
-        x, xl, _, _ = next(bar)
+        bar = batch_flow([x_test], [ws], 1)
+        x, xl = next(bar)
         print(x, xl)
         pred = model_pred.predict(
             sess,

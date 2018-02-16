@@ -21,7 +21,7 @@ def test(bidirectional, cell_type, depth,
 
     from sequence_to_sequence import SequenceToSequence
     from discriminative import Discriminative
-    from data_utils import batch_flow_bucket
+    from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
     x_data, y_data, ws = pickle.load(
@@ -62,7 +62,7 @@ def test(bidirectional, cell_type, depth,
             parallel_iterations=32,
             time_major=time_major,
             hidden_units=hidden_units,
-            optimizer='adadelta'
+            optimizer='adam'
         )
         init = tf.global_variables_initializer()
         sess = tf.Session(config=config)
@@ -91,9 +91,7 @@ def test(bidirectional, cell_type, depth,
 
 
     # 开始训练
-    flow = batch_flow_bucket(
-        x_data, y_data, ws, ws, batch_size
-    )
+    flow = batch_flow([x_data, y_data], ws, batch_size)
 
     for epoch in range(1, n_epoch + 1):
         costs = []

@@ -18,7 +18,7 @@ def test(bidirectional, cell_type, depth,
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
-    from data_utils import batch_flow_bucket
+    from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
     x_data, y_data, ws = pickle.load(
@@ -58,15 +58,13 @@ def test(bidirectional, cell_type, depth,
                 use_dropout=use_dropout,
                 parallel_iterations=64,
                 hidden_units=hidden_units,
-                optimizer='adadelta',
+                optimizer='adam',
                 time_major=time_major
             )
             init = tf.global_variables_initializer()
             sess.run(init)
 
-            flow = batch_flow_bucket(
-                x_data, y_data, ws, ws, batch_size
-            )
+            flow = batch_flow([x_data, y_data], ws, batch_size)
 
             for epoch in range(1, n_epoch + 1):
                 costs = []
@@ -81,7 +79,7 @@ def test(bidirectional, cell_type, depth,
                         np.mean(costs)
                     ))
 
-            model.save(sess, save_path)
+                model.save(sess, save_path)
 
     # 测试部分
     tf.reset_default_graph()
@@ -107,8 +105,8 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket(
-            x_data, y_data, ws, ws, 1
+        bar = batch_flow(
+            [x_data, y_data], ws, 1
         )
         t = 0
         for x, xl, y, yl in bar:

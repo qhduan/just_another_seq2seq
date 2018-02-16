@@ -63,8 +63,8 @@ def test(bidirectional, cell_type, depth,
             if user_text in ('exit', 'quit'):
                 exit(0)
             x_test = [list(user_text.lower())]
-            bar = batch_flow(x_test, x_test, ws, ws, 1)
-            x, xl, _, _ = next(bar)
+            bar = batch_flow([x_test], [ws], 1)
+            x, xl = next(bar)
             # x = np.array([
             #     list(reversed(xx))
             #     for xx in x

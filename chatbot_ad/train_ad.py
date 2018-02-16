@@ -25,7 +25,7 @@ def test(bidirectional, cell_type, depth,
 
     from sequence_to_sequence import SequenceToSequence
     from discriminative import Discriminative
-    from data_utils import batch_flow_bucket
+    from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
     x_data, y_data, ws = pickle.load(
@@ -33,7 +33,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 256
+    batch_size = 512
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -59,7 +59,7 @@ def test(bidirectional, cell_type, depth,
 
         model_d = Discriminative(
             input_vocab_size=len(ws),
-            batch_size=batch_size * 2,
+            batch_size=batch_size,
             learning_rate=0.001,
             bidirectional=bidirectional,
             cell_type=cell_type,
@@ -97,7 +97,7 @@ def test(bidirectional, cell_type, depth,
             use_dropout=use_dropout,
             parallel_iterations=64,
             hidden_units=hidden_units,
-            optimizer='adadelta',
+            optimizer='adam',
             time_major=time_major
         )
 
@@ -107,9 +107,7 @@ def test(bidirectional, cell_type, depth,
             model_ad.load(sess_ad, forward_path)
 
     # 开始训练
-    flow = batch_flow_bucket(
-        x_data, y_data, ws, ws, batch_size
-    )
+    flow = batch_flow([x_data, y_data], ws, batch_size)
 
     for epoch in range(1, n_epoch + 1):
         costs = []
