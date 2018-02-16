@@ -33,7 +33,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 512
+    batch_size = 256
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -146,7 +146,7 @@ def test(bidirectional, cell_type, depth,
             if a.shape[1] == 0:
                 continue
 
-            rewards = model_d.predict(sess_d, a, al)
+            rewards = model_d.predict(sess_d, x, xl, a, al)
             rewards = rewards[:, 1]
             rewards = rewards.reshape(-1, 1)
 

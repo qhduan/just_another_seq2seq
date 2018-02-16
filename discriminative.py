@@ -29,7 +29,7 @@ class Discriminative(object):
     def __init__(self,
                  input_vocab_size, batch_size,
                  mode='train', depth=1, embedding_size=128,
-                 hidden_units=64, cell_type='lstm',
+                 hidden_units=256, cell_type='lstm',
                  bidirectional=False,
                  use_residual=False, use_dropout=False,
                  dropout=0.1, time_major=True,
@@ -38,6 +38,7 @@ class Discriminative(object):
                  learning_rate=0.001,
                  max_gradient_norm=5.0,
                  seed=0):
+
         self.input_vocab_size = input_vocab_size
         self.batch_size = batch_size
         self.mode = mode
@@ -109,6 +110,31 @@ class Discriminative(object):
             name='encoder_inputs_length'
         )
 
+        # 编码器输入，shape=(batch_size, time_step)
+        # 有 batch_size 句话，每句话是最大长度为 time_step 的 index 表示
+        self.x = tf.placeholder(
+            dtype=tf.int32,
+            shape=(self.batch_size, None),
+            name='x'
+        )
+
+        # 编码器长度输入，shape=(batch_size, 1)
+        # 指的是 batch_size 句话每句话的长度
+        self.xl = tf.placeholder(
+            dtype=tf.int32,
+            shape=(self.batch_size,),
+            name='xl'
+        )
+
+        # 编码器的embedding
+        with tf.device(_get_embed_device(self.input_vocab_size)):
+            self.encoder_embeddings = tf.get_variable(
+                name='embedding',
+                shape=(self.input_vocab_size, self.embedding_size),
+                initializer=self.initializer,
+                dtype=tf.float32
+            )
+
         if self.mode == 'train':
             self.targets = tf.placeholder(
                 dtype=tf.float32,
@@ -152,28 +178,15 @@ class Discriminative(object):
             for _ in range(self.depth)
         ])
 
+    def build_rnn(self, x, xl):
 
-    def build_encoder(self):
-        """构建编码器
-        """
-        # print("构建编码器")
-        with tf.variable_scope('encoder'):
             # 构建 encoder_cell
-            self.encoder_cell = self.build_encoder_cell()
-
-            # 编码器的embedding
-            with tf.device(_get_embed_device(self.input_vocab_size)):
-                self.encoder_embeddings = tf.get_variable(
-                    name='embedding',
-                    shape=(self.input_vocab_size, self.embedding_size),
-                    initializer=self.initializer,
-                    dtype=tf.float32
-                )
+            encoder_cell = self.build_encoder_cell()
 
             # embedded之后的输入 shape = (batch_size, time_step, embedding_size)
-            self.encoder_inputs_embedded = tf.nn.embedding_lookup(
+            encoder_inputs_embedded = tf.nn.embedding_lookup(
                 params=self.encoder_embeddings,
-                ids=self.encoder_inputs
+                ids=x
             )
 
             # Input projection layer to feed embedded inputs to the cell
@@ -183,81 +196,90 @@ class Discriminative(object):
             input_layer = layers.Dense(
                 self.hidden_units, dtype=tf.float32, name='input_projection'
             )
-            self.input_layer = input_layer
 
             # Embedded inputs having gone through input projection layer
-            self.encoder_inputs_embedded = input_layer(
-                self.encoder_inputs_embedded
+            encoder_inputs_embedded = input_layer(
+                encoder_inputs_embedded
             )
 
-            inputs = self.encoder_inputs_embedded
+            inputs = encoder_inputs_embedded
             if self.time_major:
                 inputs = tf.transpose(inputs, (1, 0, 2))
 
             if not self.bidirectional:
                 (
-                    self.encoder_outputs,
+                    encoder_outputs,
                     _
                 ) = tf.nn.dynamic_rnn(
-                    cell=self.encoder_cell,
+                    cell=encoder_cell,
                     inputs=inputs,
-                    sequence_length=self.encoder_inputs_length,
+                    sequence_length=xl,
                     dtype=tf.float32,
                     time_major=self.time_major,
                     parallel_iterations=self.parallel_iterations,
                     swap_memory=True
                 )
             else:
-                self.encoder_cell_bw = self.build_encoder_cell()
+                encoder_cell_bw = self.build_encoder_cell()
                 (
                     (encoder_fw_outputs, encoder_bw_outputs),
                     (_, _)
                 ) = tf.nn.bidirectional_dynamic_rnn(
-                    cell_fw=self.encoder_cell,
-                    cell_bw=self.encoder_cell_bw,
+                    cell_fw=encoder_cell,
+                    cell_bw=encoder_cell_bw,
                     inputs=inputs,
-                    sequence_length=self.encoder_inputs_length,
+                    sequence_length=xl,
                     dtype=tf.float32,
                     time_major=self.time_major,
                     parallel_iterations=self.parallel_iterations,
                     swap_memory=True
                 )
 
-                self.encoder_outputs = tf.concat(
+                encoder_outputs = tf.concat(
                     (encoder_fw_outputs, encoder_bw_outputs), 2)
 
 
             # self.encoder_outputs
             if self.time_major:
-                self.encoder_outputs = tf.transpose(
-                    self.encoder_outputs, (1, 0, 2))
+                encoder_outputs = tf.transpose(
+                    encoder_outputs, (1, 0, 2))
 
-            self.encoder_outputs = self.encoder_outputs[:, -1, :]
+            encoder_outputs = encoder_outputs[:, -1, :]
+            encoder_outputs = tf.reshape(encoder_outputs, (self.batch_size, -1))
+
+            return encoder_outputs
+
+    def build_encoder(self):
+        """构建编码器
+        """
+        # print("构建编码器")
+        with tf.variable_scope('encoder'):
+
+            with tf.variable_scope('output_x'):
+                output_x = self.build_rnn(self.x, self.xl)
+
+            with tf.variable_scope('output_en'):
+                output_en = self.build_rnn(self.encoder_inputs, self.encoder_inputs_length)
+
 
             hidden_units = self.hidden_units
             if self.bidirectional:
                 hidden_units *= 2
 
-            softmax_w = tf.get_variable(
-                name='softmax_w',
-                shape=(hidden_units, 2),
-                initializer=self.initializer,
-                dtype=tf.float32
-            )
-            softmax_b = tf.get_variable(
-                name='softmax_b',
-                shape=(2,),
-                initializer=tf.zeros_initializer(),
-                dtype=tf.float32
-            )
+            self.logits = tf.layers.dense(output_x + output_en, units=2)
 
-            self.outputs = tf.nn.softmax(tf.nn.xw_plus_b(
-                self.encoder_outputs,
-                softmax_w, softmax_b, name='softmax_output'))
+            self.outputs = tf.nn.softmax(self.logits)
 
 
             if self.mode == 'train':
-                self.loss = tf.reduce_mean((self.outputs - self.targets) ** 2)
+
+                self.loss = tf.nn.softmax_cross_entropy_with_logits_v2(
+                    labels=self.targets, logits=self.logits)
+
+                correct_pred = tf.equal(
+                    tf.argmax(self.outputs, 1),
+                    tf.argmax(self.targets, 1))
+                self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
 
     def init_optimizer(self):
@@ -298,9 +320,11 @@ class Discriminative(object):
 
 
 
-    def predict(self, sess, encoder_inputs, encoder_inputs_length):
+    def predict(self, sess, x, xl, encoder_inputs, encoder_inputs_length):
 
         input_feed = {
+            self.x.name: x,
+            self.xl.name: xl,
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
             self.keep_prob_placeholder.name: 1.0
@@ -311,16 +335,18 @@ class Discriminative(object):
         return sess.run(output_feed, input_feed)
 
 
-    def train(self, sess, encoder_inputs, encoder_inputs_length, targets):
+    def train(self, sess, x, xl, encoder_inputs, encoder_inputs_length, targets):
 
         input_feed = {
+            self.x.name: x,
+            self.xl.name: xl,
             self.encoder_inputs.name: encoder_inputs,
             self.encoder_inputs_length.name: encoder_inputs_length,
             self.targets: targets,
             self.keep_prob_placeholder.name: self.keep_prob
         }
 
-        output_feed = [self.updates, self.loss, self.outputs]
+        output_feed = [self.updates, self.loss, self.accuracy]
 
         return sess.run(output_feed, input_feed)[1:]
 

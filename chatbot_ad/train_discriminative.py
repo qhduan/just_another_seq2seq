@@ -10,6 +10,7 @@ import numpy as np
 import tensorflow as tf
 import jieba
 from tqdm import tqdm
+from sklearn.utils import shuffle
 
 sys.path.append('..')
 
@@ -28,7 +29,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 128
+    batch_size = 32
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -50,8 +51,8 @@ def test(bidirectional, cell_type, depth,
             input_vocab_size=len(ws),
             target_vocab_size=len(ws),
             batch_size=batch_size,
-            mode='decode',
-            beam_width=12,
+            mode='train',
+            beam_width=0,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -72,16 +73,15 @@ def test(bidirectional, cell_type, depth,
         model_d = Discriminative(
             input_vocab_size=len(ws),
             batch_size=batch_size * 2,
-            mode='train',
+            learning_rate=0.01,
             bidirectional=bidirectional,
             cell_type=cell_type,
-            depth=1,
+            depth=depth,
             use_residual=use_residual,
             use_dropout=use_dropout,
             parallel_iterations=32,
             time_major=time_major,
-            hidden_units=64,
-            embedding_size=64,
+            hidden_units=hidden_units,
             optimizer='adadelta'
         )
         init = tf.global_variables_initializer()
@@ -104,8 +104,8 @@ def test(bidirectional, cell_type, depth,
 
             x, xl, y, yl = next(flow)
 
-            a = model_pred.predict(
-                sess, x, xl
+            _, a = model_pred.entropy(
+                sess, x, xl, y, yl
             )
 
             al = []
@@ -134,14 +134,32 @@ def test(bidirectional, cell_type, depth,
             batch = np.concatenate((a, y), axis=0)
             batchl = np.concatenate((al, yl), axis=0)
 
-            cost, pred = model_d.train(sess_d, batch, batchl, targets)
-            costs.append(cost)
-            accuracy.append((pred.argmax() == targets.argmax()) / len(targets))
+            batch = batch.tolist()
+            batchl = batchl.tolist()
 
-            bar.set_description('epoch {} loss={:.6f} acc={:.6f}'.format(
+            # batch, batchl = shuffle(batch, batchl)
+
+            xx = np.concatenate((x, x), axis=0)
+            xxl = np.concatenate((xl, xl), axis=0)
+
+            # tmp_batch = list(zip(xx, xxl, batch, batchl))
+            # tmp_batch = sorted(tmp_batch, key=lambda x: x[1], reverse=True)
+            # xx, xxl, batch, batchl = zip(*tmp_batch)
+
+            batch = np.array(batch).astype(np.int32)
+            batchl = np.array(batchl)
+
+            cost, acc = model_d.train(sess_d, xx, xxl, batch, batchl, targets)
+            costs.append(cost)
+            accuracy.append(acc)
+
+            # print(batch, batchl)
+
+            bar.set_description('epoch {} loss={:.6f} acc={:.6f} {}'.format(
                 epoch,
                 np.mean(costs),
-                np.mean(accuracy)
+                np.mean(accuracy),
+                len(costs)
             ))
 
         model_d.save(sess_d, save_path)
