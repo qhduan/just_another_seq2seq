@@ -28,14 +28,14 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 64
+    batch_size = 512
     steps = int(len(x_data) / batch_size) + 1
 
-    config = tf.ConfigProto(
-        device_count={'CPU': 1, 'GPU': 0},
-        allow_soft_placement=True,
-        log_device_placement=False
-    )
+    # config = tf.ConfigProto(
+    #     device_count={'CPU': 1, 'GPU': 0},
+    #     allow_soft_placement=True,
+    #     log_device_placement=False
+    # )
 
     # save_path = '/tmp/s2ss_chatbot.ckpt'
     save_path = './s2ss_chatbot_discriminative.ckpt'
@@ -51,7 +51,7 @@ def test(bidirectional, cell_type, depth,
             target_vocab_size=len(ws),
             batch_size=batch_size,
             mode='decode',
-            beam_width=0,
+            beam_width=12,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
