@@ -28,8 +28,8 @@ def test(bidirectional, cell_type, depth,
         open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
-    batch_size = 32
+    n_epoch = 5
+    batch_size = 256
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
