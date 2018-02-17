@@ -109,33 +109,33 @@ def test(bidirectional, cell_type, depth,
     # 开始训练
     flow = batch_flow([x_data, y_data], ws, batch_size)
 
-    for epoch in range(1, n_epoch + 1):
-        costs = []
-        lengths = []
-        bar = tqdm(range(steps), total=steps,
-                   desc='epoch {}, loss=0.000000'.format(epoch))
-        for _ in bar:
+    # for epoch in range(1, n_epoch + 1):
+    #     costs = []
+    #     lengths = []
+    #     bar = tqdm(range(steps), total=steps,
+    #                desc='epoch {}, loss=0.000000'.format(epoch))
+    #     for _ in bar:
+    #
+    #         x, xl, y, yl = next(flow)
+    #
+    #         rewards = model_d.predict(sess_d, x, xl, y, yl)
+    #         rewards = rewards[:, 1]
+    #         rewards = rewards.reshape(-1, 1)
+    #
+    #         cost = model_ad.train(sess_ad, x, xl, y, yl)#, rewards)
+    #
+    #         costs.append(cost)
+    #         # lengths.append(np.mean(al))
+    #         bar.set_description('epoch {} loss={:.6f} rs={:.4f} rm={:.4f} rm={:.4f}'.format(
+    #             epoch,
+    #             np.mean(costs),
+    #             # np.mean(lengths),
+    #             np.mean(rewards),
+    #             np.min(rewards),
+    #             np.max(rewards)
+    #         ))
 
-            x, xl, y, yl = next(flow)
-
-            rewards = model_d.predict(sess_d, x, xl, y, yl)
-            rewards = rewards[:, 1]
-            rewards = rewards.reshape(-1, 1)
-
-            cost = model_ad.train(sess_ad, x, xl, y, yl)#, rewards)
-
-            costs.append(cost)
-            # lengths.append(np.mean(al))
-            bar.set_description('epoch {} loss={:.6f} rs={:.4f} rm={:.4f} rm={:.4f}'.format(
-                epoch,
-                np.mean(costs),
-                # np.mean(lengths),
-                np.mean(rewards),
-                np.min(rewards),
-                np.max(rewards)
-            ))
-
-        model_ad.save(sess_ad, save_path)
+    model_ad.save(sess_ad, save_path)
 
 
 def main():

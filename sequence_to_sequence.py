@@ -88,7 +88,8 @@ class SequenceToSequence(object):
                  alignment_history=False,
                  time_major=False,
                  seed=0,
-                 parallel_iterations=32):
+                 parallel_iterations=32,
+                 share_embedding=False):
         """保存参数变量，开始构建整个模型
         Args:
             input_vocab_size: 输入词表大小
@@ -135,7 +136,9 @@ class SequenceToSequence(object):
             seed: 一些层间操作的随机数 seed 设置
             parallel_iterations:
                 dynamic_rnn 和 dynamic_decode 的并行数量
-                如果要取得可重复结果，在有dropout的情况下，应该设置为 1，否则结果会不确定
+                如果要取得可重复结果，在有dropout的情况下，应该设置为
+            share_embedding:
+                如果为True，那么encoder和decoder就会公用一个embedding
         """
 
         self.input_vocab_size = input_vocab_size
@@ -158,11 +161,16 @@ class SequenceToSequence(object):
         self.seed = seed
         self.parallel_iterations = parallel_iterations
         self.time_major = time_major
+        self.share_embedding = share_embedding
         # Initialize encoder_embeddings to have variance=1.
         sqrt3 = math.sqrt(3)  # Uniform(-sqrt(3), sqrt(3)) has variance=1.
         self.initializer = tf.random_uniform_initializer(
             -sqrt3, sqrt3, dtype=tf.float32
         )
+
+        if share_embedding:
+            assert input_vocab_size == target_vocab_size, \
+                '如果打开 share_embedding，两个vocab_size必须一样'
 
         assert mode in ('train', 'decode'), \
             'mode 必须是 "train" 或 "decode" 而不是 "{}"'.format(mode)
@@ -560,13 +568,16 @@ class SequenceToSequence(object):
             ) = self.build_decoder_cell()
 
             # 解码器embedding
-            with tf.device(_get_embed_device(self.target_vocab_size)):
-                self.decoder_embeddings = tf.get_variable(
-                    name='embeddings',
-                    shape=(self.target_vocab_size, self.embedding_size),
-                    initializer=self.initializer,
-                    dtype=tf.float32
-                )
+            if self.share_embedding:
+                self.decoder_embeddings = self.encoder_embeddings
+            else:
+                with tf.device(_get_embed_device(self.target_vocab_size)):
+                    self.decoder_embeddings = tf.get_variable(
+                        name='embeddings',
+                        shape=(self.target_vocab_size, self.embedding_size),
+                        initializer=self.initializer,
+                        dtype=tf.float32
+                    )
 
             # On Using Very Large Target Vocabulary
             # for Neural Machine Translation
