@@ -122,7 +122,7 @@ def test(bidirectional, cell_type, depth,
             rewards = rewards[:, 1]
             rewards = rewards.reshape(-1, 1)
 
-            cost = model_ad.train(sess_ad, x, xl, y, yl, rewards)
+            cost = model_ad.train(sess_ad, x, xl, y, yl)#, rewards)
 
             costs.append(cost)
             # lengths.append(np.mean(al))
