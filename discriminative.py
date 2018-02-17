@@ -265,6 +265,9 @@ class Discriminative(object):
                 hidden_units *= 2
 
             l = tf.concat((output_x, output_en), 1)
+
+            l = tf.tanh(tf.layers.dense(l, units=hidden_units))
+
             self.logits = tf.layers.dense(l, units=2)
             self.logits = tf.contrib.layers.batch_norm(self.logits)
 
