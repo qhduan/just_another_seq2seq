@@ -689,7 +689,9 @@ class SequenceToSequence(object):
                     labels=self.decoder_targets_train,
                     logits=decoder_logits_train)
                 # self.train_entropy *= self.masks
+                # print(self.train_entropy.shape)
                 self.train_entropy_rewards = tf.multiply(self.train_entropy, self.rewards)
+                # print('self.train_entropy_rewards.shape', self.train_entropy_rewards.shape)
                 self.train_entropy_rewards *= self.masks
 
                 # https://github.com/tensorflow/tensorflow/blob/r1.5/tensorflow/contrib/seq2seq/python/ops/loss.py

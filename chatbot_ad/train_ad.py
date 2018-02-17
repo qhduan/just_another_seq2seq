@@ -118,45 +118,21 @@ def test(bidirectional, cell_type, depth,
 
             x, xl, y, yl = next(flow)
 
-            _, a = model_ad.entropy(
-                sess_ad, x, xl, y, yl
-            )
-
-            al = []
-            new_a = []
-            for aa in a:
-                for j in range(0, len(aa)):
-                    if aa[j] == WordSequence.END:
-                        break
-                new_a.append(list(aa[:j]))
-                if j <= 0:
-                    j = 1
-                al.append(j)
-            max_a_len = max([len(aa) for aa in new_a])
-            a = []
-            for aa in new_a:
-                if len(aa) < max_a_len:
-                    aa += [WordSequence.END] * (max_a_len - len(aa))
-                a.append(aa)
-            al = np.array(al)
-            a = np.array(a)
-
-            if a.shape[1] == 0:
-                continue
-
-            rewards = model_d.predict(sess_d, x, xl, a, al)
+            rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
             rewards = rewards.reshape(-1, 1)
 
             cost = model_ad.train(sess_ad, x, xl, y, yl, rewards)
 
             costs.append(cost)
-            lengths.append(np.mean(al))
-            bar.set_description('epoch {} loss={:.6f} c={:.4f} rs={:.4f}'.format(
+            # lengths.append(np.mean(al))
+            bar.set_description('epoch {} loss={:.6f} rs={:.4f} rm={:.4f} rm={:.4f}'.format(
                 epoch,
                 np.mean(costs),
-                np.mean(lengths),
-                np.mean(rewards)
+                # np.mean(lengths),
+                np.mean(rewards),
+                np.min(rewards),
+                np.max(rewards)
             ))
 
         model_ad.save(sess_ad, save_path)
