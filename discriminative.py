@@ -243,8 +243,10 @@ class Discriminative(object):
                 encoder_outputs = tf.transpose(
                     encoder_outputs, (1, 0, 2))
 
-            encoder_outputs = encoder_outputs[:, -1, :]
-            encoder_outputs = tf.reshape(encoder_outputs, (self.batch_size, -1))
+            encoder_outputs = tf.reduce_sum(encoder_outputs, 1)
+            # print(self.time_major, encoder_outputs.shape)
+            # encoder_outputs = encoder_outputs[-1]
+            # encoder_outputs = tf.reshape(encoder_outputs, (self.batch_size, -1))
 
             return encoder_outputs
 

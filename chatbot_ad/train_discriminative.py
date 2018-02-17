@@ -28,7 +28,7 @@ def test(bidirectional, cell_type, depth,
         open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
+    n_epoch = 5
     batch_size = 512
     steps = int(len(x_data) / batch_size) + 1
 
@@ -73,15 +73,15 @@ def test(bidirectional, cell_type, depth,
         model_d = Discriminative(
             input_vocab_size=len(ws),
             batch_size=batch_size * 2,
-            learning_rate=0.001,
+            learning_rate=0.0001,
             bidirectional=bidirectional,
             cell_type=cell_type,
-            depth=1,
-            use_residual=False,
-            use_dropout=False,
+            depth=depth,
+            use_residual=use_residual,
+            use_dropout=use_dropout,
             parallel_iterations=32,
             time_major=time_major,
-            hidden_units=64,
+            hidden_units=hidden_units,
             optimizer='adam'
         )
         init = tf.global_variables_initializer()
