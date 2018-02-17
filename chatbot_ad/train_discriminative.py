@@ -73,7 +73,7 @@ def test(bidirectional, cell_type, depth,
         model_d = Discriminative(
             input_vocab_size=len(ws),
             batch_size=batch_size * 2,
-            learning_rate=0.0001,
+            learning_rate=0.01,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
