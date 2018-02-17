@@ -56,10 +56,10 @@ def test(bidirectional, cell_type, depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
-                parallel_iterations=64,
                 hidden_units=hidden_units,
                 optimizer='adam',
-                time_major=time_major
+                time_major=time_major,
+                share_embedding=True
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -97,7 +97,8 @@ def test(bidirectional, cell_type, depth,
         use_dropout=use_dropout,
         hidden_units=hidden_units,
         time_major=time_major,
-        parallel_iterations=1
+        parallel_iterations=1,
+        share_embedding=True
     )
     init = tf.global_variables_initializer()
 

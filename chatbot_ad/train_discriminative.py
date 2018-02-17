@@ -59,10 +59,10 @@ def test(bidirectional, cell_type, depth,
             attention_type=attention_type,
             use_residual=use_residual,
             use_dropout=use_dropout,
-            parallel_iterations=32,
             time_major=time_major,
             hidden_units=hidden_units,
-            optimizer='adam'
+            optimizer='adam',
+            share_embedding=True
         )
         init = tf.global_variables_initializer()
         sess = tf.Session(config=config)
