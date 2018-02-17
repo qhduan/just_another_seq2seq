@@ -58,7 +58,7 @@ def test(bidirectional, cell_type, depth,
         init = tf.global_variables_initializer()
         sess_rl = tf.Session(config=config)
         sess_rl.run(init)
-        model_rl.load(sess, save_path_rl)
+        model_rl.load(sess_rl, save_path_rl)
 
     # 测试部分
     with graph.as_default():
