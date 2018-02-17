@@ -1,5 +1,5 @@
 """
-对SequenceToSequence模型进行基本的参数组合测试
+对RNNCRF模型进行基本的参数组合测试
 """
 
 import sys
@@ -14,10 +14,11 @@ sys.path.append('..')
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major, hidden_units):
+         use_residual, use_dropout, time_major, hidden_units,
+         output_project_active, crf_loss=True, save_path = './s2ss_crf.ckpt'):
     """测试不同参数在生成的假数据上的运行结果"""
 
-    from sequence_to_sequence import SequenceToSequence
+    from rnn_crf import RNNCRF
     from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
@@ -31,8 +32,8 @@ def test(bidirectional, cell_type, depth,
     split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 20
-    batch_size = 32
+    n_epoch = 10
+    batch_size = 128
     steps = int(len(x_train) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -40,8 +41,6 @@ def test(bidirectional, cell_type, depth,
         allow_soft_placement=True,
         log_device_placement=False
     )
-
-    save_path = '/tmp/s2ss_ner.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -51,21 +50,23 @@ def test(bidirectional, cell_type, depth,
 
         with tf.Session(config=config) as sess:
 
-            model = SequenceToSequence(
+            model = RNNCRF(
                 input_vocab_size=len(ws_input),
                 target_vocab_size=len(ws_target),
+                max_decode_step=100,
                 batch_size=batch_size,
                 learning_rate=0.001,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
-                attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
                 parallel_iterations=64,
                 hidden_units=hidden_units,
                 optimizer='adam',
-                time_major=time_major
+                time_major=time_major,
+                output_project_active=output_project_active,
+                crf_loss=crf_loss
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -93,22 +94,24 @@ def test(bidirectional, cell_type, depth,
             model.save(sess, save_path)
 
     # 测试部分
+
     tf.reset_default_graph()
-    model_pred = SequenceToSequence(
+    model_pred = RNNCRF(
         input_vocab_size=len(ws_input),
         target_vocab_size=len(ws_target),
-        batch_size=1,
+        max_decode_step=100,
+        batch_size=batch_size,
         mode='decode',
-        beam_width=12,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
-        attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
         hidden_units=hidden_units,
         time_major=time_major,
-        parallel_iterations=1 # for test
+        parallel_iterations=1,
+        output_project_active=output_project_active,
+        crf_loss=crf_loss
     )
     init = tf.global_variables_initializer()
 
@@ -116,58 +119,55 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket([x_test, y_test], [ws_input, ws_target], 1)
-        t = 0
-        for x, xl, y, yl in bar:
+        pbar = tqdm(range(100))
+        flow = batch_flow([x_test, y_test], [ws_input, ws_target], batch_size)
+        acc = []
+        prec = []
+        rec = []
+        for i in pbar:
+            x, xl, y, yl = next(flow)
             pred = model_pred.predict(
                 sess,
                 np.array(x),
                 np.array(xl)
             )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0]))
-            t += 1
-            if t >= 30:
-                break
 
-    tf.reset_default_graph()
-    model_pred = SequenceToSequence(
-        input_vocab_size=len(ws_input),
-        target_vocab_size=len(ws_target),
-        batch_size=1,
-        mode='decode',
-        beam_width=0,
-        bidirectional=bidirectional,
-        cell_type=cell_type,
-        depth=depth,
-        attention_type=attention_type,
-        use_residual=use_residual,
-        use_dropout=use_dropout,
-        hidden_units=hidden_units,
-        time_major=time_major,
-        parallel_iterations=1 # for test
-    )
-    init = tf.global_variables_initializer()
+            for j in range(batch_size):
 
-    with tf.Session(config=config) as sess:
-        sess.run(init)
-        model_pred.load(sess, save_path)
+                right = np.asarray(ws_target.inverse_transform(y[j]))
+                predict = ws_target.inverse_transform(pred[j])
+                if len(predict) < len(right):
+                    predict += ['O'] * (len(right) - len(predict))
+                predict = np.asarray(predict)
 
-        bar = batch_flow_bucket([x_test, y_test], [ws_input, ws_target], 1)
-        t = 0
-        for x, xl, y, yl in bar:
-            pred = model_pred.predict(
-                sess,
-                np.array(x),
-                np.array(xl)
-            )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0]))
-            t += 1
-            if t >= 30:
-                break
+                pp = predict[:yl[j]]
+                rr = right[:yl[j]]
+                if len(rr) > 0:
+                    acc.append(np.sum(pp == rr) / len(rr))
+
+                pp = predict[:yl[j]]
+                rr = right[:yl[j]]
+                pp = pp[rr != 'O']
+                rr = rr[rr != 'O']
+                if len(rr) > 0:
+                    rec.append(np.sum(pp == rr) / len(rr))
+
+                pp = predict[:yl[j]]
+                rr = right[:yl[j]]
+                rr = rr[pp != 'O']
+                pp = pp[pp != 'O']
+                if len(rr) > 0:
+                    prec.append(np.sum(pp == rr) / len(rr))
+
+            if i < 3:
+                # print(ws_input.inverse_transform(x[0]))
+                # print(ws_target.inverse_transform(y[0]))
+                # print(ws_target.inverse_transform(pred[0]))
+                pass
+            else:
+                pbar.set_description(
+                    'acc: {:.4f} prec: {:.4f} rec: {:.4f}'.format(
+                        np.mean(acc), np.mean(prec), np.mean(rec)))
 
 
 def main():
@@ -175,7 +175,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'lstm', 2, 'Bahdanau', False, True, True, 64)
+    test(True, 'lstm', 1, False, True, False, 64, 'tanh')
 
 
 if __name__ == '__main__':
