@@ -38,6 +38,28 @@ def test(bidirectional, cell_type, depth,
     graph = tf.Graph()
     graph_rl = tf.Graph()
 
+    with graph_rl.as_default():
+        model_rl = SequenceToSequence(
+            input_vocab_size=len(ws),
+            target_vocab_size=len(ws),
+            batch_size=1,
+            mode='decode',
+            beam_width=12,
+            bidirectional=bidirectional,
+            cell_type=cell_type,
+            depth=depth,
+            attention_type=attention_type,
+            use_residual=use_residual,
+            use_dropout=use_dropout,
+            parallel_iterations=1,
+            time_major=time_major,
+            hidden_units=hidden_units # for test
+        )
+        init = tf.global_variables_initializer()
+        sess_rl = tf.Session(config=config)
+        sess_rl.run(init)
+        model_rl.load(sess, save_path_rl)
+
     # 测试部分
     with graph.as_default():
         model_pred = SequenceToSequence(
@@ -60,28 +82,6 @@ def test(bidirectional, cell_type, depth,
         sess = tf.Session(config=config)
         sess.run(init)
         model_pred.load(sess, save_path)
-
-    with graph_rl.as_default():
-        model_rl = SequenceToSequence(
-            input_vocab_size=len(ws),
-            target_vocab_size=len(ws),
-            batch_size=1,
-            mode='decode',
-            beam_width=12,
-            bidirectional=bidirectional,
-            cell_type=cell_type,
-            depth=depth,
-            attention_type=attention_type,
-            use_residual=use_residual,
-            use_dropout=use_dropout,
-            parallel_iterations=1,
-            time_major=time_major,
-            hidden_units=hidden_units # for test
-        )
-        init = tf.global_variables_initializer()
-        sess_rl = tf.Session(config=config)
-        sess_rl.run(init)
-        model_rl.load(sess, save_path_rl)
 
 
     last = None
