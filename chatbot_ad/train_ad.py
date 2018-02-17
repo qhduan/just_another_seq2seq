@@ -120,22 +120,47 @@ def test(bidirectional, cell_type, depth,
 
             rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
+
+            for i in range(batch_size):
+                text = ws.inverse_transform(y[i])
+                text = ''.join(text)[:yl[i]]
+                rewards[i] *= repeat_reward(text)
+                rewards[i] *= chinese_reward(text)
+
+
             rewards = rewards.reshape(-1, 1)
 
             cost = model_ad.train(sess_ad, x, xl, y, yl)#, rewards)
 
             costs.append(cost)
             # lengths.append(np.mean(al))
-            bar.set_description('epoch {} loss={:.6f} rs={:.4f} rm={:.4f} rm={:.4f}'.format(
+            bar.set_description('epoch {} loss={:.6f} rmean={:.4f} rmin={:.4f} rmax={:.4f} rmed={:.4f}'.format(
                 epoch,
                 np.mean(costs),
-                # np.mean(lengths),
                 np.mean(rewards),
                 np.min(rewards),
-                np.max(rewards)
+                np.max(rewards),
+                np.median(rewards)
             ))
 
     model_ad.save(sess_ad, save_path)
+
+
+def repeat_reward(arr):
+    """重复越多，分数越低"""
+    arr = list(arr)
+    from collections import Counter
+    counter = Counter(arr)
+    t = sum([i for i in counter.values() if i > 1])
+    return(max(0, 1 - t / len(counter)))
+
+
+def chinese_reward(text):
+    """中文越多分数越高
+    chiese_reward("⺀-⺙⺛-⻳⼀-⿕々〇〡-〩〸-〺〻㐀-䶵一-鿃豈-鶴侮-頻並-龎")
+    """
+    import re
+    return len(re.findall(r'[\u4e00-\u9fff，。！？]', text)) / len(text)
 
 
 def main():
