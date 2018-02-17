@@ -132,13 +132,12 @@ class Discriminative(object):
                 name='embedding',
                 shape=(self.input_vocab_size, self.embedding_size),
                 initializer=self.initializer,
-                dtype=tf.float32
             )
 
         if self.mode == 'train':
             self.targets = tf.placeholder(
-                dtype=tf.float32,
-                shape=(self.batch_size, 2),
+                dtype=tf.int64,
+                shape=(self.batch_size,),
                 name='target'
             )
 
@@ -261,7 +260,6 @@ class Discriminative(object):
             with tf.variable_scope('output_en'):
                 output_en = self.build_rnn(self.encoder_inputs, self.encoder_inputs_length)
 
-
             hidden_units = self.hidden_units
             if self.bidirectional:
                 hidden_units *= 2
@@ -281,7 +279,7 @@ class Discriminative(object):
 
                 correct_pred = tf.equal(
                     tf.argmax(self.outputs, 1),
-                    tf.argmax(self.targets, 1))
+                    self.targets)
                 self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
 
 

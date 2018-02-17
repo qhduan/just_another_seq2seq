@@ -123,11 +123,7 @@ def test(bidirectional, cell_type, depth,
             if y.shape[1] < max_len:
                 y = np.concatenate((y, np.ones((batch_size, max_len - y.shape[1])) * WordSequence.END), axis=1)
 
-            targets = np.array(([
-                (1, 0)
-            ] * len(a)) + ([
-                (0, 1)
-            ] * len(a)))
+            targets = np.array(([0] * len(a)) + ([1] * len(a)))
 
             batch = np.concatenate((a, y), axis=0)
             batchl = np.concatenate((al, yl), axis=0)
