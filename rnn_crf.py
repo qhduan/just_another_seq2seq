@@ -482,8 +482,7 @@ class RNNCRF(object):
                 )
 
                 self.loss *= masks
-
-                self.loss = tf.reduce_mean(self.loss)
+                self.loss = tf.reduce_sum(self.loss)
 
 
     def save(self, sess, save_path='model.ckpt'):
