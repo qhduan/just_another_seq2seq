@@ -688,7 +688,7 @@ class SequenceToSequence(object):
                 self.train_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
                     labels=self.decoder_targets_train,
                     logits=decoder_logits_train)
-                self.train_entropy *= self.masks
+                # self.train_entropy *= self.masks
                 self.train_entropy_rewards = tf.multiply(self.train_entropy, self.rewards)
                 self.train_entropy_rewards *= self.masks
 
@@ -1052,7 +1052,9 @@ class SequenceToSequence(object):
 
 
     def predict(self, sess,
-                encoder_inputs, encoder_inputs_length, attention=False):
+                encoder_inputs,
+                encoder_inputs_length,
+                attention=False):
         """预测输出"""
 
         # 输入
@@ -1073,7 +1075,7 @@ class SequenceToSequence(object):
                     self.final_state[1].alignment_history.stack()
                 ], input_feed)
 
-                return predpred[:, -1], atten
+                return pred[:, 0], atten
 
             pred, atten = sess.run([
                 self.decoder_pred_decode,
@@ -1085,11 +1087,14 @@ class SequenceToSequence(object):
         # else:
 
         if self.use_beamsearch_decode:
-            pred, = sess.run([
-                self.decoder_pred_decode
+            pred, beam_prob = sess.run([
+                self.decoder_pred_decode, self.beam_prob
             ], input_feed)
+            beam_prob = np.mean(beam_prob, axis=1)
+            # print(pred.shape, pred)
+            # print(beam_prob.shape, beam_prob)
 
-            return pred[:, -1]
+            return pred[:, 0]
 
         pred, = sess.run([
             self.decoder_pred_decode

@@ -25,9 +25,6 @@ def test(bidirectional, cell_type, depth,
     x_data, y_data, ws_input, ws_target = pickle.load(
         open('ner.pkl', 'rb'))
 
-    # 获取一些假数据
-    # x_data, y_data, ws_input, ws_target = generate(size=10000)
-
     # 训练部分
     split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (

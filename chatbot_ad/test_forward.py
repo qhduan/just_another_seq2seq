@@ -41,16 +41,16 @@ def test(bidirectional, cell_type, depth,
         target_vocab_size=len(ws),
         batch_size=1,
         mode='decode',
-        beam_width=0,
+        beam_width=12,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
-        parallel_iterations=1,
+        hidden_units=hidden_units,
         time_major=time_major,
-        hidden_units=hidden_units # for test
+        parallel_iterations=1
     )
     init = tf.global_variables_initializer()
 
