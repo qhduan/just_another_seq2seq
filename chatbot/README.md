@@ -29,8 +29,8 @@ python3 extract_conv.py
 
 ## 4、训练数据
 
-运行 `train.py` 训练（默认到`/tmp/s2ss_chatbot.ckpt`）
+运行 `python3 train.py` 训练（默认到`./s2ss_chatbot.ckpt`）
 
 ## 5、测试数据（测试翻译）
 
-运行 `test.py` 查看测试结果
+运行 `python3 test.py` 查看测试结果

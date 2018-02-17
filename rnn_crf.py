@@ -66,7 +66,8 @@ class RNNCRF(object):
                  output_project_active=None,
                  time_major=False,
                  seed=0,
-                 parallel_iterations=32):
+                 parallel_iterations=32,
+                 crf_loss=True):
         """保存参数变量，开始构建整个模型
         Args:
             input_vocab_size: 输入词表大小
@@ -131,6 +132,7 @@ class RNNCRF(object):
         self.seed = seed
         self.parallel_iterations = parallel_iterations
         self.time_major = time_major
+        self.crf_loss = crf_loss
 
         assert output_project_active in (None, 'tanh', 'sigmoid', 'linear'), \
             'output_project_active 必须是 None, "tanh", "sigmoid", "linear"之一'
@@ -439,29 +441,49 @@ class RNNCRF(object):
                                       crf_w, crf_b, name='crf_output')
 
             # crf 计算必须固定住max_decode_step
-            self.decoder_outputs_decode = tf.reshape(
+            self.logits = tf.reshape(
                 outputs,
                 shape=[self.batch_size,
                        self.max_decode_step,
                        self.target_vocab_size])
 
-            (
-                log_likelihood,
-                self.transition_params
-            ) = tf.contrib.crf.crf_log_likelihood(
-                self.decoder_outputs_decode,
-                self.decoder_inputs,
-                self.decoder_inputs_length)
+            if self.crf_loss:
+                (
+                    log_likelihood,
+                    self.transition_params
+                ) = tf.contrib.crf.crf_log_likelihood(
+                    self.logits,
+                    self.decoder_inputs,
+                    self.decoder_inputs_length)
 
-            (
-                self.viterbi_sequence,
-                self.viterbi_score
-            ) = tf.contrib.crf.crf_decode(
-                self.decoder_outputs_decode,
-                self.transition_params,
-                self.encoder_inputs_length)
+                (
+                    self.viterbi_sequence,
+                    self.viterbi_score
+                ) = tf.contrib.crf.crf_decode(
+                    self.logits,
+                    self.transition_params,
+                    self.encoder_inputs_length)
 
-            self.loss = tf.reduce_mean(-log_likelihood)
+                self.loss = tf.reduce_mean(-log_likelihood)
+            else:
+                self.outputs = tf.argmax(self.logits, 2)
+
+                self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
+                    labels=self.decoder_inputs, logits=self.logits)
+
+                max_decoder_length = tf.reduce_max(
+                    self.decoder_inputs_length
+                )
+
+                masks = tf.sequence_mask(
+                    lengths=self.decoder_inputs_length,
+                    maxlen=self.max_decode_step,
+                    dtype=tf.float32, name='masks'
+                )
+
+                self.loss *= masks
+
+                self.loss = tf.reduce_mean(self.loss)
 
 
     def save(self, sess, save_path='model.ckpt'):
@@ -658,10 +680,19 @@ class RNNCRF(object):
         input_feed[self.keep_prob_placeholder.name] = 1.0
 
         # crf mode
-        pred, = sess.run([self.viterbi_sequence], input_feed)
-        preds = []
-        for i in range(pred.shape[0]):
-            item = pred[i][:encoder_inputs_length[i]]
-            preds.append(item)
+        if self.crf_loss:
+            pred = sess.run(self.viterbi_sequence, input_feed)
+            preds = []
+            for i in range(pred.shape[0]):
+                item = pred[i][:encoder_inputs_length[i]]
+                preds.append(item)
 
-        return np.array(preds)
+            return np.array(preds)
+        else:
+            pred = sess.run(self.outputs, input_feed)
+            preds = []
+            for i in range(pred.shape[0]):
+                item = pred[i][:encoder_inputs_length[i]]
+                preds.append(item)
+
+            return np.array(preds)

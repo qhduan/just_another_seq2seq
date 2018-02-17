@@ -2,3 +2,5 @@
 *.zip
 *.pkl
 *.conv
+*.ckpt*
+checkpoint

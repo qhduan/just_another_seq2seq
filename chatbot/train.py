@@ -18,19 +18,13 @@ def test(bidirectional, cell_type, depth,
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
-    from data_utils import batch_flow_bucket
+    from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
-    x_data, y_data, ws_input, ws_target = pickle.load(
+    x_data, y_data, ws = pickle.load(
         open('chatbot.pkl', 'rb'))
 
-    # 获取一些假数据
-    # x_data, y_data, ws_input, ws_target = generate(size=10000)
-
     # 训练部分
-    split = int(len(x_data) * 0.8)
-    x_train, x_test, y_train, y_test = (
-        x_data[:split], x_data[split:], y_data[:split], y_data[split:])
     n_epoch = 5
     batch_size = 256
     steps = int(len(x_train) / batch_size) + 1
@@ -41,7 +35,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss_chatbot.ckpt'
+    save_path = './s2ss_chatbot.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -52,8 +46,8 @@ def test(bidirectional, cell_type, depth,
         with tf.Session(config=config) as sess:
 
             model = SequenceToSequence(
-                input_vocab_size=len(ws_input),
-                target_vocab_size=len(ws_target),
+                input_vocab_size=len(ws),
+                target_vocab_size=len(ws),
                 batch_size=batch_size,
                 learning_rate=0.001,
                 bidirectional=bidirectional,
@@ -73,9 +67,7 @@ def test(bidirectional, cell_type, depth,
             # print(sess.run(model.input_layer.kernel))
             # exit(1)
 
-            flow = batch_flow_bucket(
-                x_train, y_train, ws_input, ws_target, batch_size
-            )
+            flow = batch_flow([x_data, y_data], ws, batch_size)
 
             for epoch in range(1, n_epoch + 1):
                 costs = []
@@ -98,8 +90,8 @@ def test(bidirectional, cell_type, depth,
     # 测试部分
     tf.reset_default_graph()
     model_pred = SequenceToSequence(
-        input_vocab_size=len(ws_input),
-        target_vocab_size=len(ws_target),
+        input_vocab_size=len(ws),
+        target_vocab_size=len(ws),
         batch_size=1,
         mode='decode',
         beam_width=12,
@@ -119,7 +111,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket(x_test, y_test, ws_input, ws_target, 1)
+        bar = batch_flow([x_data, y_data], ws, 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -127,17 +119,17 @@ def test(bidirectional, cell_type, depth,
                 np.array(x),
                 np.array(xl)
             )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0]))
+            print(ws.inverse_transform(x[0]))
+            print(ws.inverse_transform(y[0]))
+            print(ws.inverse_transform(pred[0]))
             t += 1
             if t >= 3:
                 break
 
     tf.reset_default_graph()
     model_pred = SequenceToSequence(
-        input_vocab_size=len(ws_input),
-        target_vocab_size=len(ws_target),
+        input_vocab_size=len(ws),
+        target_vocab_size=len(ws),
         batch_size=1,
         mode='decode',
         beam_width=1,
@@ -157,7 +149,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket(x_test, y_test, ws_input, ws_target, 1)
+        bar = batch_flow([x_data, y_data], ws, 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -165,9 +157,9 @@ def test(bidirectional, cell_type, depth,
                 np.array(x),
                 np.array(xl)
             )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0]))
+            print(ws.inverse_transform(x[0]))
+            print(ws.inverse_transform(y[0]))
+            print(ws.inverse_transform(pred[0]))
             t += 1
             if t >= 3:
                 break

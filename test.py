@@ -73,7 +73,7 @@ def test(bidirectional, cell_type, depth,
             for epoch in range(1, n_epoch + 1):
                 costs = []
                 flow = batch_flow(
-                    x_train, y_train, ws_input, ws_target, batch_size
+                    [x_train, y_train], [ws_input, ws_target], batch_size
                 )
                 bar = tqdm(range(steps),
                            desc='epoch {}, loss=0.000000'.format(epoch))
@@ -113,7 +113,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow(x_test, y_test, ws_input, ws_target, 1)
+        bar = batch_flow([x_test, y_test], [ws_input, ws_target], 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -152,7 +152,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow(x_test, y_test, ws_input, ws_target, 1)
+        bar = batch_flow([x_test, y_test], [ws_input, ws_target], 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -205,43 +205,6 @@ def main():
     columns = list(params.keys()) + ['loss']
     dframe = pd.DataFrame(rows, columns=columns)
     dframe.to_excel('/tmp/s2ss_test.xlsx')
-
-
-    # 吐槽一下，上面的代码是下面的代码的 pythonic 的改写版本……
-    # 虽然可能不是一个最好的 pythonic 实现
-    # 我也不确定这样是不是真的好
-    #
-    # for bidirectional in (True, False):
-    #     for cell_type in ('gru', 'lstm'):
-    #         for depth in (1, 2, 3):
-    #             for attention_type in ('Luong', 'Bahdanau'):
-    #                 for use_residual in (True, False):
-    #                     for use_dropout in (True, False):
-    #                         print('=' * 30)
-    #                         print(
-    #                             'bidirectional:',
-    #                             bidirectional,
-    #                             '\n',
-    #                             'cell_type:',
-    #                             cell_type,
-    #                             '\n',
-    #                             'depth:',
-    #                             depth,
-    #                             '\n',
-    #                             'attention_type:',
-    #                             attention_type,
-    #                             '\n',
-    #                             'use_residual:',
-    #                             use_residual,
-    #                             '\n',
-    #                             'use_dropout:',
-    #                             use_dropout
-    #                         )
-    #                         print('-' * 30)
-    #                         test(
-    #                             bidirectional, cell_type, depth,
-    #                             attention_type, use_residual, use_dropout
-    #                         )
 
 
 if __name__ == '__main__':

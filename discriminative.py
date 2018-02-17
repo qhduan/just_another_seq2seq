@@ -275,8 +275,9 @@ class Discriminative(object):
 
             if self.mode == 'train':
 
-                self.loss = tf.nn.softmax_cross_entropy_with_logits_v2(
-                    labels=self.targets, logits=self.logits)
+                self.loss = tf.reduce_sum(
+                    tf.nn.softmax_cross_entropy_with_logits_v2(
+                        labels=self.targets, logits=self.logits))
 
                 correct_pred = tf.equal(
                     tf.argmax(self.outputs, 1),

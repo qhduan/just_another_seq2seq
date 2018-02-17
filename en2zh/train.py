@@ -18,7 +18,7 @@ def test(bidirectional, cell_type, depth,
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
-    from data_utils import batch_flow_bucket
+    from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
     x_data, y_data, ws_input, ws_target = pickle.load(
@@ -41,7 +41,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss_en2zh.ckpt'
+    save_path = './s2ss_en2zh.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -74,7 +74,7 @@ def test(bidirectional, cell_type, depth,
             # exit(1)
 
             flow = batch_flow_bucket(
-                x_train, y_train, ws_input, ws_target, batch_size
+                [x_train, y_train], [ws_input, ws_target], batch_size
             )
 
             for epoch in range(1, n_epoch + 1):
@@ -116,7 +116,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket(x_test, y_test, ws_input, ws_target, 1)
+        bar = batch_flow_bucket([x_test, y_test], [ws_input, ws_target], 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -154,7 +154,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket(x_test, y_test, ws_input, ws_target, 1)
+        bar = batch_flow_bucket([x_test, y_test], [ws_input, ws_target], 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(

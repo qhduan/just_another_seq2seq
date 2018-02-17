@@ -8,6 +8,7 @@ from tqdm import tqdm
 
 sys.path.append('..')
 
+
 def make_split(line):
     """构造合并两个句子之间的符号
     """
@@ -15,7 +16,14 @@ def make_split(line):
         return []
     return ['，']
 
-def main(limit=15):
+
+def good_line(line):
+    if len(re.findall(r'[a-zA-Z]', ''.join(line))) > 5:
+        return False
+    return True
+
+
+def main(limit=15, min_limit=5):
     """执行程序
     Args:
         limit: 只输出句子长度小于limit的句子
@@ -49,12 +57,18 @@ def main(limit=15):
             last_line = None
             if i > 0:
                 last_line = group[i - 1]
+                if not good_line(last_line):
+                    last_line = None
             next_line = None
             if i < len(group) - 1:
                 next_line = group[i + 1]
+                if not good_line(next_line):
+                    next_line = None
             next_next_line = None
             if i < len(group) - 2:
                 next_next_line = group[i + 2]
+                if not good_line(next_next_line):
+                    next_next_line = None
 
             if next_line:
                 x_data.append(line)
@@ -74,20 +88,20 @@ def main(limit=15):
         print('-' * 20)
 
     data = list(zip(x_data, y_data))
-    data = [(x, y) for x, y in data if len(x) < limit and len(y) < limit]
+    data = [
+        (x, y) for x, y in data
+        if len(x) < limit and len(y) < limit and len(y) >= min_limit]
     x_data, y_data = zip(*data)
 
     print('fit word_sequence')
 
     ws_input = WordSequence()
-    ws_target = WordSequence()
     ws_input.fit(x_data)
-    ws_target.fit(y_data)
 
     print('dump')
 
     pickle.dump(
-        (x_data, y_data, ws_input, ws_target),
+        (x_data, y_data, ws_input),
         open('chatbot.pkl', 'wb')
     )
 

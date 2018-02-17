@@ -32,7 +32,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss_en2zh.ckpt'
+    save_path = './s2ss_en2zh.ckpt'
 
     # 测试部分
     tf.reset_default_graph()
@@ -63,8 +63,8 @@ def test(bidirectional, cell_type, depth,
             if user_text in ('exit', 'quit'):
                 exit(0)
             x_test = [nltk.word_tokenize(user_text.lower())]
-            bar = batch_flow(x_test, x_test, ws_input, ws_target, 1)
-            x, xl, _, _ = next(bar)
+            bar = batch_flow([x_test], [ws_input], 1)
+            x, xl = next(bar)
             # x = np.array([
             #     list(reversed(xx))
             #     for xx in x

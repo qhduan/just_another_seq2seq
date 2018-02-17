@@ -16,7 +16,7 @@ from fake_data import generate
 
 
 def test(bidirectional, cell_type, depth,
-         use_residual, use_dropout, output_project_active):
+         use_residual, use_dropout, output_project_active, crf_loss):
     """测试不同参数在生成的假数据上的运行结果"""
 
     # 获取一些假数据
@@ -61,7 +61,8 @@ def test(bidirectional, cell_type, depth,
                 output_project_active=output_project_active,
                 hidden_units=64,
                 embedding_size=64,
-                parallel_iterations=1
+                parallel_iterations=1,
+                crf_loss=crf_loss
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -72,7 +73,7 @@ def test(bidirectional, cell_type, depth,
             for epoch in range(1, n_epoch + 1):
                 costs = []
                 flow = batch_flow(
-                    x_train, y_train, ws_input, ws_target, batch_size
+                    [x_train, y_train], [ws_input, ws_target], batch_size
                 )
                 bar = tqdm(range(steps),
                            desc='epoch {}, loss=0.000000'.format(epoch))
@@ -93,7 +94,7 @@ def test(bidirectional, cell_type, depth,
         input_vocab_size=len(ws_input),
         target_vocab_size=len(ws_target),
         max_decode_step=100,
-        batch_size=1,
+        batch_size=batch_size,
         mode='decode',
         bidirectional=bidirectional,
         cell_type=cell_type,
@@ -103,7 +104,8 @@ def test(bidirectional, cell_type, depth,
         output_project_active=output_project_active,
         hidden_units=64,
         embedding_size=64,
-        parallel_iterations=1
+        parallel_iterations=1,
+        crf_loss=crf_loss
     )
     init = tf.global_variables_initializer()
 
@@ -111,20 +113,27 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow(x_test, y_test, ws_input, ws_target, 1)
-        t = 0
-        for x, xl, y, yl in bar:
+        flow = batch_flow([x_test, y_test], [ws_input, ws_target], batch_size)
+        pbar = tqdm(range(100))
+        acc = []
+        for i in pbar:
+            x, xl, y, yl = next(flow)
             pred = model_pred.predict(
                 sess,
                 np.array(x),
                 np.array(xl)
             )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0]))
-            t += 1
-            if t >= 3:
-                break
+
+            for j in range(batch_size):
+                right = np.sum(y[j][:yl[j]] == pred[j][:yl[j]])
+                acc.append(right / yl[j])
+
+            if i < 3:
+                print(ws_input.inverse_transform(x[0]))
+                print(ws_target.inverse_transform(y[0]))
+                print(ws_target.inverse_transform(pred[0]))
+            else:
+                pbar.set_description('acc: {}'.format(np.mean(acc)))
 
 
 def main():
@@ -139,7 +148,8 @@ def main():
         ('depth', (1, 2, 3)),
         ('use_residual', (True, False)),
         ('use_dropout', (True, False)),
-        ('output_project_active', (None, 'tanh', 'sigmoid', 'linear'))
+        ('output_project_active', (None, 'tanh', 'sigmoid', 'linear')),
+        ('crf_loss', (False, True))
     ))
 
     loop = itertools.product(*params.values())
@@ -151,42 +161,6 @@ def main():
             print(key, ':', value)
         print('-' * 30)
         test(**param)
-
-    # 吐槽一下，上面的代码是下面的代码的 pythonic 的改写版本……
-    # 虽然可能不是一个最好的 pythonic 实现
-    # 我也不确定这样是不是真的好
-    #
-    # for bidirectional in (True, False):
-    #     for cell_type in ('gru', 'lstm'):
-    #         for depth in (1, 2, 3):
-    #             for attention_type in ('Luong', 'Bahdanau'):
-    #                 for use_residual in (True, False):
-    #                     for use_dropout in (True, False):
-    #                         print('=' * 30)
-    #                         print(
-    #                             'bidirectional:',
-    #                             bidirectional,
-    #                             '\n',
-    #                             'cell_type:',
-    #                             cell_type,
-    #                             '\n',
-    #                             'depth:',
-    #                             depth,
-    #                             '\n',
-    #                             'attention_type:',
-    #                             attention_type,
-    #                             '\n',
-    #                             'use_residual:',
-    #                             use_residual,
-    #                             '\n',
-    #                             'use_dropout:',
-    #                             use_dropout
-    #                         )
-    #                         print('-' * 30)
-    #                         test(
-    #                             bidirectional, cell_type, depth,
-    #                             attention_type, use_residual, use_dropout
-    #                         )
 
 
 if __name__ == '__main__':

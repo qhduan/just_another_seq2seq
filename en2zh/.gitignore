@@ -2,3 +2,5 @@
 *.tmx
 *.gz
 *.pkl
+*.ckpt*
+checkpoint
