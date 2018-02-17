@@ -103,8 +103,8 @@ def test(bidirectional, cell_type, depth,
             np.array(x),
             np.array(xl)
         )
-        pred_rl = model_pred.predict(
-            sess,
+        pred_rl = model_rl.predict(
+            sess_rl,
             np.array(x),
             np.array(xl)
         )
