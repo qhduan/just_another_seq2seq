@@ -53,7 +53,8 @@ def test(bidirectional, cell_type, depth,
             use_dropout=use_dropout,
             parallel_iterations=1,
             time_major=time_major,
-            hidden_units=hidden_units # for test
+            hidden_units=hidden_units,
+            share_embedding=True
         )
         init = tf.global_variables_initializer()
         sess_rl = tf.Session(config=config)
@@ -76,7 +77,8 @@ def test(bidirectional, cell_type, depth,
             use_dropout=use_dropout,
             parallel_iterations=1,
             time_major=time_major,
-            hidden_units=hidden_units # for test
+            hidden_units=hidden_units,
+            share_embedding=True
         )
         init = tf.global_variables_initializer()
         sess = tf.Session(config=config)

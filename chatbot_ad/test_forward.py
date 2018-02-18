@@ -50,7 +50,8 @@ def test(bidirectional, cell_type, depth,
         use_dropout=use_dropout,
         hidden_units=hidden_units,
         time_major=time_major,
-        parallel_iterations=1
+        parallel_iterations=1,
+        share_embedding=True
     )
     init = tf.global_variables_initializer()
 
