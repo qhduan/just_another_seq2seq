@@ -8,7 +8,7 @@ import numpy as np
 import tensorflow as tf
 
 from sequence_to_sequence import SequenceToSequence
-from sequence_to_sequence import batch_flow
+from data_utils import batch_flow
 
 def test(bidirectional, cell_type, depth, attention_type):
     """测试并展示attention图
@@ -57,7 +57,7 @@ def test(bidirectional, cell_type, depth, attention_type):
             for epoch in range(1, n_epoch + 1):
                 costs = []
                 flow = batch_flow(
-                    x_train, y_train, ws_input, ws_target, batch_size
+                    [x_train, y_train], [ws_input, ws_target], batch_size
                 )
                 bar = tqdm(range(steps),
                            desc='epoch {}, loss=0.000000'.format(epoch))
@@ -81,7 +81,7 @@ def test(bidirectional, cell_type, depth, attention_type):
             target_vocab_size=len(ws_target),
             batch_size=1,
             mode='decode',
-            beam_width=1,
+            beam_width=0,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -95,9 +95,9 @@ def test(bidirectional, cell_type, depth, attention_type):
             sess.run(init)
             model_pred.load(sess, save_path)
 
-            bar = batch_flow(x_test, y_test, ws_input, ws_target, 1)
+            pbar = batch_flow([x_test, y_test], [ws_input, ws_target], 1)
             t = 0
-            for x, xl, y, yl in bar:
+            for x, xl, y, yl in pbar:
                 pred, atten = model_pred.predict(
                     sess,
                     np.array(x),

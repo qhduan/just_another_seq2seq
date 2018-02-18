@@ -73,7 +73,7 @@ def test(bidirectional, cell_type, depth,
             # print(sess.run(model.input_layer.kernel))
             # exit(1)
 
-            flow = batch_flow_bucket(
+            flow = batch_flow(
                 [x_train, y_train], [ws_input, ws_target], batch_size
             )
 
@@ -116,7 +116,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket([x_test, y_test], [ws_input, ws_target], 1)
+        bar = batch_flow([x_test, y_test], [ws_input, ws_target], 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -154,7 +154,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow_bucket([x_test, y_test], [ws_input, ws_target], 1)
+        bar = batch_flow([x_test, y_test], [ws_input, ws_target], 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(

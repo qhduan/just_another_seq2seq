@@ -2,13 +2,10 @@
 对SequenceToSequence模型进行基本的参数组合测试
 """
 
-import sys
 import random
-import pickle
 
 import numpy as np
 import tensorflow as tf
-from tqdm import tqdm
 from train_ad import test
 
 

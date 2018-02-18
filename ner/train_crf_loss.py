@@ -15,7 +15,7 @@ sys.path.append('..')
 
 def test(bidirectional, cell_type, depth,
          use_residual, use_dropout, time_major, hidden_units,
-         output_project_active, crf_loss=True, save_path = './s2ss_crf.ckpt'):
+         output_project_active, crf_loss=True, save_path='./s2ss_crf.ckpt'):
     """测试不同参数在生成的假数据上的运行结果"""
 
     from rnn_crf import RNNCRF
@@ -139,21 +139,21 @@ def test(bidirectional, cell_type, depth,
 
                 pp = predict[:yl[j]]
                 rr = right[:yl[j]]
-                if len(rr) > 0:
+                if rr:
                     acc.append(np.sum(pp == rr) / len(rr))
 
                 pp = predict[:yl[j]]
                 rr = right[:yl[j]]
                 pp = pp[rr != 'O']
                 rr = rr[rr != 'O']
-                if len(rr) > 0:
+                if rr:
                     rec.append(np.sum(pp == rr) / len(rr))
 
                 pp = predict[:yl[j]]
                 rr = right[:yl[j]]
                 rr = rr[pp != 'O']
                 pp = pp[pp != 'O']
-                if len(rr) > 0:
+                if rr:
                     prec.append(np.sum(pp == rr) / len(rr))
 
             if i < 3:

@@ -1,4 +1,6 @@
-
+"""
+一个用于gan训练的discriminator
+"""
 
 import math
 import random
@@ -6,25 +8,21 @@ import random
 import numpy as np
 import tensorflow as tf
 from tensorflow import layers
-from tensorflow.python.util import nest
-from tensorflow.python.ops import array_ops
-from tensorflow.contrib import seq2seq
-from tensorflow.contrib.seq2seq import BahdanauAttention
-from tensorflow.contrib.seq2seq import LuongAttention
-from tensorflow.contrib.seq2seq import AttentionWrapper
-from tensorflow.contrib.seq2seq import BeamSearchDecoder
 from tensorflow.contrib.rnn import LSTMCell
 from tensorflow.contrib.rnn import GRUCell
 from tensorflow.contrib.rnn import MultiRNNCell
 from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import ResidualWrapper
-from tensorflow.contrib.rnn import LSTMStateTuple
 
-from word_sequence import WordSequence
 from data_utils import _get_embed_device
 
 
 class Discriminative(object):
+
+    """
+    一个用于gan训练的discriminator
+    至于为什么它的名字不叫Discriminator嘛……呵呵
+    """
 
     def __init__(self,
                  input_vocab_size, batch_size,
@@ -178,77 +176,80 @@ class Discriminative(object):
         ])
 
     def build_rnn(self, x, xl):
+        """根据输入x和输入长度xl
+        构建一个RNN的outputs
+        """
 
-            # 构建 encoder_cell
-            encoder_cell = self.build_encoder_cell()
+        # 构建 encoder_cell
+        encoder_cell = self.build_encoder_cell()
 
-            # embedded之后的输入 shape = (batch_size, time_step, embedding_size)
-            encoder_inputs_embedded = tf.nn.embedding_lookup(
-                params=self.encoder_embeddings,
-                ids=x
+        # embedded之后的输入 shape = (batch_size, time_step, embedding_size)
+        encoder_inputs_embedded = tf.nn.embedding_lookup(
+            params=self.encoder_embeddings,
+            ids=x
+        )
+
+        # Input projection layer to feed embedded inputs to the cell
+        # ** Essential when use_residual=True to match input/output dims
+        # 输入投影层
+        # 如果使用了residual，为了对齐输入和输出层，这里可能必须增加一个投影
+        input_layer = layers.Dense(
+            self.hidden_units, dtype=tf.float32, name='input_projection'
+        )
+
+        # Embedded inputs having gone through input projection layer
+        encoder_inputs_embedded = input_layer(
+            encoder_inputs_embedded
+        )
+
+        inputs = encoder_inputs_embedded
+        if self.time_major:
+            inputs = tf.transpose(inputs, (1, 0, 2))
+
+        if not self.bidirectional:
+            (
+                encoder_outputs,
+                _
+            ) = tf.nn.dynamic_rnn(
+                cell=encoder_cell,
+                inputs=inputs,
+                sequence_length=xl,
+                dtype=tf.float32,
+                time_major=self.time_major,
+                parallel_iterations=self.parallel_iterations,
+                swap_memory=True
+            )
+        else:
+            encoder_cell_bw = self.build_encoder_cell()
+            (
+                (encoder_fw_outputs, encoder_bw_outputs),
+                (_, _)
+            ) = tf.nn.bidirectional_dynamic_rnn(
+                cell_fw=encoder_cell,
+                cell_bw=encoder_cell_bw,
+                inputs=inputs,
+                sequence_length=xl,
+                dtype=tf.float32,
+                time_major=self.time_major,
+                parallel_iterations=self.parallel_iterations,
+                swap_memory=True
             )
 
-            # Input projection layer to feed embedded inputs to the cell
-            # ** Essential when use_residual=True to match input/output dims
-            # 输入投影层
-            # 如果使用了residual，为了对齐输入和输出层，这里可能必须增加一个投影
-            input_layer = layers.Dense(
-                self.hidden_units, dtype=tf.float32, name='input_projection'
-            )
-
-            # Embedded inputs having gone through input projection layer
-            encoder_inputs_embedded = input_layer(
-                encoder_inputs_embedded
-            )
-
-            inputs = encoder_inputs_embedded
-            if self.time_major:
-                inputs = tf.transpose(inputs, (1, 0, 2))
-
-            if not self.bidirectional:
-                (
-                    encoder_outputs,
-                    _
-                ) = tf.nn.dynamic_rnn(
-                    cell=encoder_cell,
-                    inputs=inputs,
-                    sequence_length=xl,
-                    dtype=tf.float32,
-                    time_major=self.time_major,
-                    parallel_iterations=self.parallel_iterations,
-                    swap_memory=True
-                )
-            else:
-                encoder_cell_bw = self.build_encoder_cell()
-                (
-                    (encoder_fw_outputs, encoder_bw_outputs),
-                    (_, _)
-                ) = tf.nn.bidirectional_dynamic_rnn(
-                    cell_fw=encoder_cell,
-                    cell_bw=encoder_cell_bw,
-                    inputs=inputs,
-                    sequence_length=xl,
-                    dtype=tf.float32,
-                    time_major=self.time_major,
-                    parallel_iterations=self.parallel_iterations,
-                    swap_memory=True
-                )
-
-                encoder_outputs = tf.concat(
-                    (encoder_fw_outputs, encoder_bw_outputs), 2)
+            encoder_outputs = tf.concat(
+                (encoder_fw_outputs, encoder_bw_outputs), 2)
 
 
-            # self.encoder_outputs
-            if self.time_major:
-                encoder_outputs = tf.transpose(
-                    encoder_outputs, (1, 0, 2))
+        # self.encoder_outputs
+        if self.time_major:
+            encoder_outputs = tf.transpose(
+                encoder_outputs, (1, 0, 2))
 
-            encoder_outputs = tf.reduce_sum(encoder_outputs, 1)
-            # print(self.time_major, encoder_outputs.shape)
-            # encoder_outputs = encoder_outputs[-1]
-            # encoder_outputs = tf.reshape(encoder_outputs, (self.batch_size, -1))
+        encoder_outputs = tf.reduce_sum(encoder_outputs, 1)
+        # print(self.time_major, encoder_outputs.shape)
+        # encoder_outputs = encoder_outputs[-1]
+        # encoder_outputs = tf.reshape(encoder_outputs, (self.batch_size, -1))
 
-            return encoder_outputs
+        return encoder_outputs
 
     def build_encoder(self):
         """构建编码器
@@ -260,7 +261,8 @@ class Discriminative(object):
                 output_x = self.build_rnn(self.x, self.xl)
 
             with tf.variable_scope('output_en'):
-                output_en = self.build_rnn(self.encoder_inputs, self.encoder_inputs_length)
+                output_en = self.build_rnn(self.encoder_inputs,
+                                           self.encoder_inputs_length)
 
             hidden_units = self.hidden_units
             if self.bidirectional:
@@ -285,7 +287,8 @@ class Discriminative(object):
                 correct_pred = tf.equal(
                     tf.argmax(self.outputs, 1),
                     self.targets)
-                self.accuracy = tf.reduce_mean(tf.cast(correct_pred, tf.float32))
+                self.accuracy = tf.reduce_mean(tf.cast(correct_pred,
+                                                       tf.float32))
 
 
     def init_optimizer(self):
@@ -327,7 +330,7 @@ class Discriminative(object):
 
 
     def predict(self, sess, x, xl, encoder_inputs, encoder_inputs_length):
-
+        """预测结果"""
         input_feed = {
             self.x.name: x,
             self.xl.name: xl,
@@ -341,8 +344,9 @@ class Discriminative(object):
         return sess.run(output_feed, input_feed)
 
 
-    def train(self, sess, x, xl, encoder_inputs, encoder_inputs_length, targets):
-
+    def train(self, sess, x, xl,
+              encoder_inputs, encoder_inputs_length, targets):
+        """训练"""
         input_feed = {
             self.x.name: x,
             self.xl.name: xl,
@@ -402,9 +406,8 @@ def test():
 
             for epoch in range(1, n_epoch + 1):
                 costs = []
-                flow = batch_flow(
-                    x_data, y_data, ws_input, ws_target, batch_size
-                )
+                flow = batch_flow([x_data, y_data],
+                                  [ws_input, ws_target], batch_size)
                 bar = tqdm(range(steps),
                            desc='epoch {}, loss=0.000000'.format(epoch))
                 for _ in bar:
@@ -413,7 +416,7 @@ def test():
                         (0, 1)
                         for x in range(len(y))
                     ])
-                    cost = model.train(sess, x, xl, targets)
+                    cost = model.train(sess, x, xl, y, yl, targets)
                     print(x.shape, xl.shape)
                     print('cost.shape, cost', cost.shape, cost)
                     exit(1)

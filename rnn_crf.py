@@ -10,15 +10,10 @@ https://www.tensorflow.org/versions/r1.4/api_docs/python/tf/contrib/crf
 
 
 import math
-import random
 
 import numpy as np
 import tensorflow as tf
 from tensorflow import layers
-from tensorflow.python.util import nest
-from tensorflow.python.ops import array_ops
-from tensorflow.contrib import seq2seq
-from tensorflow.contrib.seq2seq import BeamSearchDecoder
 from tensorflow.contrib.rnn import LSTMCell
 from tensorflow.contrib.rnn import GRUCell
 from tensorflow.contrib.rnn import MultiRNNCell
@@ -471,10 +466,6 @@ class RNNCRF(object):
                 self.loss = tf.nn.sparse_softmax_cross_entropy_with_logits(
                     labels=self.decoder_inputs, logits=self.logits)
 
-                max_decoder_length = tf.reduce_max(
-                    self.decoder_inputs_length
-                )
-
                 masks = tf.sequence_mask(
                     lengths=self.decoder_inputs_length,
                     maxlen=self.max_decode_step,
@@ -687,11 +678,11 @@ class RNNCRF(object):
                 preds.append(item)
 
             return np.array(preds)
-        else:
-            pred = sess.run(self.outputs, input_feed)
-            preds = []
-            for i in range(pred.shape[0]):
-                item = pred[i][:encoder_inputs_length[i]]
-                preds.append(item)
+        # else:
+        pred = sess.run(self.outputs, input_feed)
+        preds = []
+        for i in range(pred.shape[0]):
+            item = pred[i][:encoder_inputs_length[i]]
+            preds.append(item)
 
-            return np.array(preds)
+        return np.array(preds)

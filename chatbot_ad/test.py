@@ -85,17 +85,11 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-
-    last = None
-
     while True:
         user_text = input('Input Chat Sentence:')
         if user_text in ('exit', 'quit'):
             exit(0)
         x_test = list(user_text.lower())
-        # if last is not None and last:
-        #     print(last)
-        #     x_test = last + [WordSequence.PAD_TAG] + x_test
         x_test = [x_test]
         bar = batch_flow([x_test], [ws], 1)
         x, xl = next(bar)
@@ -120,7 +114,6 @@ def test(bidirectional, cell_type, depth,
             if pp == WordSequence.PAD_TAG:
                 break
             p.append(pp)
-        last = p
 
 
 def main():

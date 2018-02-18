@@ -8,9 +8,9 @@ import pickle
 
 import numpy as np
 import tensorflow as tf
-import jieba
+# import jieba
 from tqdm import tqdm
-from sklearn.utils import shuffle
+# from sklearn.utils import shuffle
 
 sys.path.append('..')
 
@@ -109,8 +109,9 @@ def test(bidirectional, cell_type, depth,
             al = []
             new_a = []
             for aa in a:
-                for j in range(0, len(aa)):
-                    if aa[j] == WordSequence.END:
+                j = 0
+                for j, aaj in enumerate(aa):
+                    if aaj == WordSequence.END:
                         break
                 new_a.append(list(aa[:j]))
                 if j <= 0:
@@ -119,9 +120,21 @@ def test(bidirectional, cell_type, depth,
 
             max_len = max((a.shape[1], y.shape[1]))
             if a.shape[1] < max_len:
-                a = np.concatenate((a, np.ones((batch_size, max_len - a.shape[1])) * WordSequence.END), axis=1)
+                a = np.concatenate(
+                    (
+                        a,
+                        np.ones(
+                            (batch_size, max_len - a.shape[1])
+                        ) * WordSequence.END
+                    ), axis=1)
             if y.shape[1] < max_len:
-                y = np.concatenate((y, np.ones((batch_size, max_len - y.shape[1])) * WordSequence.END), axis=1)
+                y = np.concatenate(
+                    (
+                        y,
+                        np.ones(
+                            (batch_size, max_len - y.shape[1])
+                        ) * WordSequence.END
+                    ), axis=1)
 
             targets = np.array(([0] * len(a)) + ([1] * len(a)))
 

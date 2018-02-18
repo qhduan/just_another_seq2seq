@@ -1,3 +1,7 @@
+"""
+不使用CRF的NER
+纯RNN或者Bi-RNN
+"""
 
 import random
 import numpy as np

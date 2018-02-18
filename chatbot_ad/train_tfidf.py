@@ -1,3 +1,6 @@
+"""
+训练一个tfidf
+"""
 
 import sys
 import pickle
@@ -7,6 +10,9 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 sys.path.append('..')
 
 def main():
+    """
+    训练一个tfidf
+    """
     x_data, _, _ = pickle.load(
         open('chatbot.pkl', 'rb'))
 

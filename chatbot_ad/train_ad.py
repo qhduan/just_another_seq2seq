@@ -9,7 +9,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
-import jieba
+# import jieba
 
 sys.path.append('..')
 
@@ -113,7 +113,6 @@ def test(bidirectional, cell_type, depth,
 
     for epoch in range(1, n_epoch + 1):
         costs = []
-        lengths = []
         bar = tqdm(range(steps), total=steps,
                    desc='epoch {}, loss=0.000000'.format(epoch))
         for _ in bar:
@@ -144,7 +143,13 @@ def test(bidirectional, cell_type, depth,
 
             costs.append(cost)
             # lengths.append(np.mean(al))
-            bar.set_description('epoch {} loss={:.6f} rmean={:.4f} rmin={:.4f} rmax={:.4f} rmed={:.4f}'.format(
+            des = ('epoch {} ',
+                   'loss={:.6f} ',
+                   'rmean={:.4f} ',
+                   'rmin={:.4f} ',
+                   'rmax={:.4f} ',
+                   'rmed={:.4f}')
+            bar.set_description(des.format(
                 epoch,
                 np.mean(costs),
                 np.mean(rewards),
@@ -158,11 +163,11 @@ def test(bidirectional, cell_type, depth,
 
 def repeat_reward(arr):
     """重复越多，分数越低"""
-    arr = list(arr)
     from collections import Counter
+    arr = list(arr)
     counter = Counter(arr)
     t = sum([i for i in counter.values() if i > 1])
-    return(max(0, 1 - t / len(counter)))
+    return max(0, 1 - t / len(counter))
 
 
 def chinese_reward(text):
