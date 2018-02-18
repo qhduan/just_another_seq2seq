@@ -109,7 +109,7 @@ def test(bidirectional, cell_type, depth,
             model_ad.load(sess_ad, forward_path)
 
     # 开始训练
-    flow = batch_flow([x_data, y_data], ws, batch_size)
+    flow = batch_flow([x_data, y_data], ws, batch_size, raw=True)
 
     for epoch in range(1, n_epoch + 1):
         costs = []
@@ -118,14 +118,17 @@ def test(bidirectional, cell_type, depth,
                    desc='epoch {}, loss=0.000000'.format(epoch))
         for _ in bar:
 
-            x, xl, y, yl = next(flow)
+            x, xl, _, y, yl, yraw = next(flow)
 
             rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
 
-            texts = ws.inverse_transform(y.tolist())
+            texts = []
             for i in range(batch_size):
-                texts[i] = ''.join(texts[i])[:yl[i]]
+                # text = ws.inverse_transform(y[i])
+                # text = ''.join(text)[:yl[i]]
+                text = ''.join(yraw[i])
+                texts.append(text)
             tfidfs = np.sum(vectorizer.transform(texts), axis=1)
             tfidfs_sum = np.sum(tfidfs)
 

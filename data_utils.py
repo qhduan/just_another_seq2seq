@@ -32,7 +32,7 @@ def transform_sentence(q, ws_q, q_max):
     return x, xl
 
 
-def batch_flow(data, ws, batch_size):
+def batch_flow(data, ws, batch_size, raw=False):
     """从数据中随机 batch_size 个的数据，然后 yield 出去
     """
 
@@ -42,9 +42,13 @@ def batch_flow(data, ws, batch_size):
         assert len(ws) == len(data), \
             'len(ws) must equal to len(data) if ws is list or tuple'
 
+    mul = 2
+    if raw:
+        mul = 3
+
     while True:
         data_batch = random.sample(all_data, batch_size)
-        batches = [[] for i in range(len(data) * 2)]
+        batches = [[] for i in range(len(data) * mul)]
 
         max_lens = []
         for j in range(len(data)):
@@ -58,8 +62,10 @@ def batch_flow(data, ws, batch_size):
                 else:
                     w = ws
                 x, xl = transform_sentence(d[j], w, max_lens[j])
-                batches[j*2].append(x)
-                batches[j*2+1].append(xl)
+                batches[j * mul].append(x)
+                batches[j * mul + 1].append(xl)
+                if raw:
+                    batches[j * mul + 2].append(d[j])
         batches = [np.asarray(x) for x in batches]
 
         yield batches
