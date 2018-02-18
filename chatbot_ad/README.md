@@ -3,7 +3,7 @@
 
 Paper: [Adversarial Learning for Neural Dialogue Generation](https://arxiv.org/abs/1701.06547)
 
-[作者的 repo](https://github.com/jiweil/Neural-Dialogue-Generation)
+[作者Jiwei Li的 repo](https://github.com/jiweil/Neural-Dialogue-Generation)
 
 ## 1、下载数据
 
