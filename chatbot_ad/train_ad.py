@@ -123,7 +123,7 @@ def test(bidirectional, cell_type, depth,
             rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
 
-            texts = ws.inverse_transform(y)
+            texts = ws.inverse_transform(y.tolist())
             for i in range(batch_size):
                 texts[i] = ''.join(texts[i])[:yl[i]]
             tfidfs = np.sum(vectorizer.transform(texts), axis=1)
