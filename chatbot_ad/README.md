@@ -1,21 +1,13 @@
 
-# Chatbot强化学习训练测试
+# Chatbot Adversarial
 
-***注意`chatbot_re`的`extract_conv.py`和`chatbot`的不一样***
+Paper: [Adversarial Learning for Neural Dialogue Generation](https://arxiv.org/abs/1701.06547)
 
-Paper: [Deep Reinforcement Learning for Dialogue Generation](https://arxiv.org/abs/1606.01541)
-
-这个Paper应该修订版在[这里](https://aclweb.org/anthology/D16-1127)
-
-Other Example:
-
-https://github.com/Marsan-Ma/tf_chatbot_seq2seq_antilm/blob/master/lib/seq2seq_model.py
-
-https://github.com/brianhuang1019/RL-Chatbot/blob/master/python/RL/train.py
+[作者的 repo](https://github.com/jiweil/Neural-Dialogue-Generation)
 
 ## 1、下载数据
 
-ssubtitle data from [here](https://github.com/fateleak/dgk_lost_conv)
+Subtitle data from [here](https://github.com/fateleak/dgk_lost_conv)
 
 ```
 wget https://github.com/fateleak/dgk_lost_conv/raw/master/dgk_shooter_min.conv.zip
@@ -41,8 +33,20 @@ python3 extract_conv.py
 
 ## 4、训练数据
 
-运行 `train.py` 训练（默认到`/tmp/s2ss_chatbot.ckpt`）
+按顺序：
 
-## 5、测试数据（测试翻译）
+训练普通的模型
+
+运行 `train_forward.py` 训练（默认到`./s2ss_chatbot_forward.ckpt`）
+
+训练一个 discriminator
+
+运行 `train_discriminative.py` 训练（默认到`./s2ss_chatbot_discriminative.ckpt`）
+
+训练 Adversarial 模型
+
+运行 `train_ad.py` 训练（默认到`./s2ss_chatbot_ad.ckpt`）
+
+## 5、测试数据（测试对话）
 
 运行 `test.py` 查看测试结果

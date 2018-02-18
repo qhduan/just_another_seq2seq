@@ -3,7 +3,7 @@
 
 ## 1、下载数据
 
-ssubtitle data from [here](https://github.com/fateleak/dgk_lost_conv)
+Subtitle data from [here](https://github.com/fateleak/dgk_lost_conv)
 
 ```
 wget https://github.com/fateleak/dgk_lost_conv/raw/master/dgk_shooter_min.conv.zip
@@ -31,6 +31,6 @@ python3 extract_conv.py
 
 运行 `python3 train.py` 训练（默认到`./s2ss_chatbot.ckpt`）
 
-## 5、测试数据（测试翻译）
+## 5、测试数据（测试对话）
 
 运行 `python3 test.py` 查看测试结果

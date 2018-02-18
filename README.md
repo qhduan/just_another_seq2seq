@@ -11,8 +11,10 @@
 - [x] 后续我可能会添加一些中文的例子，例如对联、古诗、闲聊、NER
 - [ ] pretrained embedding support
 - [ ] 根据本repo，我会整理一份seq2seq中间的各种trick和实现细节的坑
-- [ ] 后续这个repo会作为一个基础完成一个dialog system
-    - seq2seq模型至少可以作为通用NER实现（截止2018年初，最好的NER应该还是bi-LSTM + CRF）
+- [ ] 后续这个repo会作为一个基础完成一个dialogue system
+    - seq2seq模型至少可以作为通用NER实现
+    - 截止2018年初，最好的NER应该还是bi-LSTM + CRF，也有不加CRF效果好的
+    - 当然这个不完全算seq2seq啦
 
 # Known issues
 
@@ -61,9 +63,12 @@ Input English Sentence:i'm really a bad boy
 ['我', '真的', '是', '一个', '坏', '男孩', '</s>', '</s>', '</s>', '</s>', '</s>', '</s>']
 ```
 
-[Chatbot实例](/chatbot/)
 
 [NER实例](/ner/)
+
+[Chatbot实例](/chatbot/)
+
+[Chatbot Adversarial实例](/chatbot_ad/)
 
 # TensorFlow alert
 
