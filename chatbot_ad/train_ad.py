@@ -35,7 +35,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 512
+    batch_size = 128
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -123,19 +123,17 @@ def test(bidirectional, cell_type, depth,
             rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
 
-            texts = []
+            texts = ws.inverse_transform(y)
             for i in range(batch_size):
-                text = ws.inverse_transform(y[i])
-                text = ''.join(text)[:yl[i]]
-                texts.append(text)
-            # tfidfs = np.sum(vectorizer.transform(texts), axis=1)
-            # tfidfs_sum = np.sum(tfidfs)
+                texts[i] = ''.join(texts[i])[:yl[i]]
+            tfidfs = np.sum(vectorizer.transform(texts), axis=1)
+            tfidfs_sum = np.sum(tfidfs)
 
             for i in range(batch_size):
                 text = texts[i]
                 rewards[i] *= repeat_reward(text)
                 rewards[i] *= chinese_reward(text)
-                # rewards[i] *= tfidfs[i] / tfidfs_sum * batch_size
+                rewards[i] *= tfidfs[i] / tfidfs_sum * batch_size
 
             rewards = rewards.reshape(-1, 1)
 
