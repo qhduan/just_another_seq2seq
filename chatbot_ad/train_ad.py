@@ -31,6 +31,8 @@ def test(bidirectional, cell_type, depth,
     x_data, y_data, ws = pickle.load(
         open('chatbot.pkl', 'rb'))
 
+    vectorizer = pickle.load(open('tfidf.pkl', 'rb'))
+
     # 训练部分
     n_epoch = 10
     batch_size = 512
@@ -121,12 +123,22 @@ def test(bidirectional, cell_type, depth,
             rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
 
+            texts = []
+            tfidfs = []
             for i in range(batch_size):
                 text = ws.inverse_transform(y[i])
                 text = ''.join(text)[:yl[i]]
+                texts.append(text)
+                tfidfs.append(np.sum(
+                    vectorizer.transform([text])
+                ))
+            tfidfs_sum = np.sum(tfidfs)
+
+            for i in range(batch_size):
+                text = texts[i]
                 rewards[i] *= repeat_reward(text)
                 rewards[i] *= chinese_reward(text)
-
+                rewards[i] *= tfidfs[i] / tfidfs_sum * batch_size
 
             rewards = rewards.reshape(-1, 1)
 
@@ -143,7 +155,7 @@ def test(bidirectional, cell_type, depth,
                 np.median(rewards)
             ))
 
-    model_ad.save(sess_ad, save_path)
+        model_ad.save(sess_ad, save_path)
 
 
 def repeat_reward(arr):
