@@ -128,14 +128,14 @@ def test(bidirectional, cell_type, depth,
                 text = ws.inverse_transform(y[i])
                 text = ''.join(text)[:yl[i]]
                 texts.append(text)
-            tfidfs = np.sum(vectorizer.transform(texts), axis=1)
-            tfidfs_sum = np.sum(tfidfs)
+            # tfidfs = np.sum(vectorizer.transform(texts), axis=1)
+            # tfidfs_sum = np.sum(tfidfs)
 
             for i in range(batch_size):
                 text = texts[i]
                 rewards[i] *= repeat_reward(text)
                 rewards[i] *= chinese_reward(text)
-                rewards[i] *= tfidfs[i] / tfidfs_sum * batch_size
+                # rewards[i] *= tfidfs[i] / tfidfs_sum * batch_size
 
             rewards = rewards.reshape(-1, 1)
 
