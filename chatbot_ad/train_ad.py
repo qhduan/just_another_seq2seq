@@ -34,7 +34,7 @@ def test(bidirectional, cell_type, depth,
     vectorizer = pickle.load(open('tfidf.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
+    n_epoch = 3
     batch_size = 512
     steps = int(len(x_data) / batch_size) + 1
 
@@ -117,7 +117,7 @@ def test(bidirectional, cell_type, depth,
                    desc='epoch {}, loss=0.000000'.format(epoch))
         for _ in bar:
 
-            x, xl, _, y, yl, yraw = next(flow)
+            x, xl, xraw, y, yl, yraw = next(flow)
 
             rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
@@ -131,11 +131,16 @@ def test(bidirectional, cell_type, depth,
             tfidfs = np.sum(vectorizer.transform(texts), axis=1)
             tfidfs_sum = np.sum(tfidfs)
 
+            def smooth(x):
+                return (0.5 + x) * (2.0/3)
+
             for i in range(batch_size):
                 text = texts[i]
-                rewards[i] *= repeat_reward(text)
-                rewards[i] *= chinese_reward(text)
-                rewards[i] *= tfidfs[i] / tfidfs_sum * batch_size
+                rewards[i] *= smooth(repeat_reward(text))
+                rewards[i] *= smooth(chinese_reward(text))
+                rewards[i] *= smooth(similarity_reward(xraw, yraw))
+                rewards[i] *= smooth(tfidfs[i] / tfidfs_sum * batch_size)
+
 
             rewards = rewards.reshape(-1, 1)
 
@@ -143,11 +148,11 @@ def test(bidirectional, cell_type, depth,
 
             costs.append(cost)
             # lengths.append(np.mean(al))
-            des = ('epoch {} ',
-                   'loss={:.6f} ',
-                   'rmean={:.4f} ',
-                   'rmin={:.4f} ',
-                   'rmax={:.4f} ',
+            des = ('epoch {} '
+                   'loss={:.6f} '
+                   'rmean={:.4f} '
+                   'rmin={:.4f} '
+                   'rmax={:.4f} '
                    'rmed={:.4f}')
             bar.set_description(des.format(
                 epoch,
@@ -176,6 +181,12 @@ def chinese_reward(text):
     """
     import re
     return len(re.findall(r'[\u4e00-\u9fff，。！？]', text)) / len(text)
+
+
+def similarity_reward(q, a):
+    """越相似，reward越小"""
+    from nltk.metrics.distance import edit_distance
+    return edit_distance(q, a) / max(len(q), len(a))
 
 
 def main():

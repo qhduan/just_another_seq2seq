@@ -25,7 +25,7 @@ def test(bidirectional, cell_type, depth,
         open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
+    n_epoch = 3
     batch_size = 512
     steps = int(len(x_data) / batch_size) + 1
 
