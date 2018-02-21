@@ -138,9 +138,10 @@ def test(bidirectional, cell_type, depth,
 
             for i in range(batch_size):
                 text = texts[i]
+                rewards[i] = smooth(rewards[i])
                 rewards[i] *= smooth(repeat_reward(text))
                 rewards[i] *= smooth(chinese_reward(text))
-                rewards[i] *= smooth(similarity_reward(xraw, yraw))
+                rewards[i] *= smooth(similarity_reward(''.join(xraw[i]), text))
                 rewards[i] *= smooth(tfidfs[i] / tfidfs_sum * batch_size)
 
 
