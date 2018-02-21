@@ -372,7 +372,10 @@ class SequenceToSequence(object):
             # 输入投影层
             # 如果使用了residual，为了对齐输入和输出层，这里可能必须增加一个投影
             input_layer = layers.Dense(
-                self.hidden_units, dtype=tf.float32, name='input_projection'
+                self.hidden_units,
+                dtype=tf.float32,
+                use_bias=False,
+                name='input_projection'
             )
             self.input_layer = input_layer
 
@@ -520,7 +523,9 @@ class SequenceToSequence(object):
             hidden_units = self.hidden_units
             if self.bidirectional:
                 hidden_units *= 2
-            input_layer = layers.Dense(hidden_units, dtype=tf.float32,
+            input_layer = layers.Dense(hidden_units,
+                                       dtype=tf.float32,
+                                       use_bias=False,
                                        name='attn_input_feeding')
             return input_layer(array_ops.concat([inputs, attention], -1))
 
@@ -587,15 +592,20 @@ class SequenceToSequence(object):
             hidden_units = self.hidden_units
             if self.bidirectional:
                 hidden_units *= 2
+
             input_layer = layers.Dense(
                 hidden_units,
                 dtype=tf.float32,
+                use_bias=False,
                 name='input_projection'
             )
 
             self.output_layer = layers.Dense(
-                self.target_vocab_size, use_bias=False,
-                name='output_projection')
+                self.target_vocab_size,
+                dtype=tf.float32,
+                use_bias=False,
+                name='output_projection'
+            )
 
             if self.mode == 'train':
                 # decoder_inputs_embedded:

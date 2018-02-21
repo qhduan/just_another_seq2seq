@@ -61,7 +61,8 @@ def test(bidirectional, cell_type, depth,
             use_dropout=use_dropout,
             time_major=time_major,
             hidden_units=hidden_units,
-            optimizer='adam',
+            optimizer='adadelta',
+            dropout=0.4,
             share_embedding=True
         )
         init = tf.global_variables_initializer()
@@ -82,7 +83,8 @@ def test(bidirectional, cell_type, depth,
             parallel_iterations=32,
             time_major=time_major,
             hidden_units=hidden_units,
-            optimizer='adam'
+            optimizer='adadelta',
+            dropout=0.4
         )
         init = tf.global_variables_initializer()
         sess_d = tf.Session(config=config)

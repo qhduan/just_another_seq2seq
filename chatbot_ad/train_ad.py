@@ -34,7 +34,7 @@ def test(bidirectional, cell_type, depth,
     vectorizer = pickle.load(open('tfidf.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 3
+    n_epoch = 2
     batch_size = 512
     steps = int(len(x_data) / batch_size) + 1
 
@@ -71,7 +71,8 @@ def test(bidirectional, cell_type, depth,
             parallel_iterations=32,
             time_major=time_major,
             hidden_units=hidden_units,
-            optimizer='adam'
+            optimizer='adadelta',
+            dropout=0.4
         )
         init = tf.global_variables_initializer()
         sess_d.run(init)
@@ -98,7 +99,8 @@ def test(bidirectional, cell_type, depth,
             use_residual=use_residual,
             use_dropout=use_dropout,
             hidden_units=hidden_units,
-            optimizer='adam',
+            optimizer='adadelta',
+            dropout=0.4,
             time_major=time_major,
             share_embedding=True
         )
