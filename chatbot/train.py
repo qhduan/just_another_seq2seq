@@ -27,7 +27,7 @@ def test(bidirectional, cell_type, depth,
     # 训练部分
     n_epoch = 5
     batch_size = 256
-    steps = int(len(x_train) / batch_size) + 1
+    steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
         # device_count={'CPU': 1, 'GPU': 0},
