@@ -49,14 +49,21 @@ class ThreadedGenerator(object):
         try:
             for value in self._iterator:
                 if not self._started:
-                    break
+                    return
                 self._queue.put(value)
         finally:
             self._queue.put(self._sentinel)
 
     def close(self):
         self._started = False
-        self._thread.join()
+        try:
+            while True:
+                self._queue.get(timeout=0)
+        except KeyboardInterrupt as e:
+            raise e
+        except:
+            pass
+        # self._thread.join()
 
     def __iter__(self):
         self._started = True

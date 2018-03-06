@@ -81,7 +81,7 @@ class SequenceToSequence(object):
                  optimizer='adam',
                  learning_rate=1e-3,
                  min_learning_rate=1e-6,
-                 decay_steps=1000000,
+                 decay_steps=500000,
                  max_gradient_norm=5.0,
                  max_decode_step=None,
                  attention_type='Bahdanau',

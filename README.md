@@ -21,7 +21,7 @@
 2018-03-06
 
 增加了chatbot中anti-lm的训练方法样例，在`chatbot/train_anti.py`中。
-这个模式参考了[L1 et al., 2015](https://arxiv.org/pdf/1510.03055v3.pdf)和代码
+这个模式参考了[Li et al., 2015](https://arxiv.org/pdf/1510.03055v3.pdf)和代码
 [Marsan-Ma/tf_chatbot_seq2seq_antilm](https://github.com/Marsan-Ma/tf_chatbot_seq2seq_antilm)。  
 
 加入anti-lm来看，diversity是有提高，不过整体来看，并不是说就很好好。
@@ -29,7 +29,7 @@
 
 虽然我在不同的地方在还尝试实现了下面这两个（其实都是一个人写的啦）
 [Li et al., 2016](https://arxiv.org/abs/1606.01541)
-[L1 et al., 2017](https://arxiv.org/abs/1701.06547)
+[Li et al., 2017](https://arxiv.org/abs/1701.06547)
 不过基本上不太成功的感觉，虽然我也没做太严格的做法。
 
 # Known issues

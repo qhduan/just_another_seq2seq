@@ -27,7 +27,7 @@ def test(bidirectional, cell_type, depth,
         open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
+    n_epoch = 20
     batch_size = 64
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
     # x_data = x_data[:100000]
@@ -65,7 +65,7 @@ def test(bidirectional, cell_type, depth,
                 learning_rate=0.001,
                 optimizer='adam',
                 share_embedding=True,
-                dropout=0.4
+                dropout=0.2
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -202,12 +202,12 @@ def main():
     test(
         bidirectional=False,
         cell_type='lstm',
-        depth=1,
+        depth=2,
         attention_type='Bahdanau',
         use_residual=False,
-        use_dropout=False,
+        use_dropout=True,
         time_major=False,
-        hidden_units=1024
+        hidden_units=512
     )
 
 

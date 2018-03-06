@@ -125,12 +125,12 @@ def main():
     test(
         bidirectional=False,
         cell_type='lstm',
-        depth=1,
+        depth=2,
         attention_type='Bahdanau',
         use_residual=False,
-        use_dropout=False,
+        use_dropout=True,
         time_major=False,
-        hidden_units=1024
+        hidden_units=512
     )
 
 
