@@ -9,6 +9,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
+from sklearn.utils import shuffle
 
 sys.path.append('..')
 
@@ -18,15 +19,19 @@ def test(bidirectional, cell_type, depth,
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
-    from data_utils import batch_flow
+    from data_utils import batch_flow_bucket as batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
+    from threadedgenerator import ThreadedGenerator
 
     x_data, y_data, ws = pickle.load(
         open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 5
-    batch_size = 256
+    n_epoch = 10
+    batch_size = 64
+    # x_data, y_data = shuffle(x_data, y_data, random_state=0)
+    # x_data = x_data[:100000]
+    # y_data = y_data[:100000]
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -49,17 +54,18 @@ def test(bidirectional, cell_type, depth,
                 input_vocab_size=len(ws),
                 target_vocab_size=len(ws),
                 batch_size=batch_size,
-                learning_rate=0.001,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
-                parallel_iterations=64,
                 hidden_units=hidden_units,
+                time_major=time_major,
+                learning_rate=0.001,
                 optimizer='adam',
-                time_major=time_major
+                share_embedding=True,
+                dropout=0.4
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -67,7 +73,9 @@ def test(bidirectional, cell_type, depth,
             # print(sess.run(model.input_layer.kernel))
             # exit(1)
 
-            flow = batch_flow([x_data, y_data], ws, batch_size)
+            flow = ThreadedGenerator(
+                batch_flow([x_data, y_data], ws, batch_size),
+                queue_maxsize=30)
 
             for epoch in range(1, n_epoch + 1):
                 costs = []
@@ -75,17 +83,19 @@ def test(bidirectional, cell_type, depth,
                            desc='epoch {}, loss=0.000000'.format(epoch))
                 for _ in bar:
                     x, xl, y, yl = next(flow)
-                    # print(x)
-                    # print(xl)
-                    # exit(0)
-                    cost = model.train(sess, x, xl, y, yl)
+                    x = np.flip(x, axis=1)
+                    # print(x, y)
+                    cost, lr = model.train(sess, x, xl, y, yl, return_lr=True)
                     costs.append(cost)
-                    bar.set_description('epoch {} loss={:.6f}'.format(
+                    bar.set_description('epoch {} loss={:.6f} lr={:.6f}'.format(
                         epoch,
-                        np.mean(costs)
+                        np.mean(costs),
+                        lr
                     ))
 
-            model.save(sess, save_path)
+                model.save(sess, save_path)
+
+            flow.close()
 
     # 测试部分
     tf.reset_default_graph()
@@ -103,7 +113,10 @@ def test(bidirectional, cell_type, depth,
         use_dropout=use_dropout,
         hidden_units=hidden_units,
         time_major=time_major,
-        parallel_iterations=1 # for test
+        parallel_iterations=1,
+        learning_rate=0.001,
+        optimizer='adam',
+        share_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -114,6 +127,7 @@ def test(bidirectional, cell_type, depth,
         bar = batch_flow([x_data, y_data], ws, 1)
         t = 0
         for x, xl, y, yl in bar:
+            x = np.flip(x, axis=1)
             pred = model_pred.predict(
                 sess,
                 np.array(x),
@@ -141,7 +155,10 @@ def test(bidirectional, cell_type, depth,
         use_dropout=use_dropout,
         hidden_units=hidden_units,
         time_major=time_major,
-        parallel_iterations=1 # for test
+        parallel_iterations=1,
+        learning_rate=0.001,
+        optimizer='adam',
+        share_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -170,7 +187,16 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'lstm', 1, 'Bahdanau', True, True, True, 64)
+    test(
+        bidirectional=False,
+        cell_type='lstm',
+        depth=1,
+        attention_type='Bahdanau',
+        use_residual=False,
+        use_dropout=False,
+        time_major=False,
+        hidden_units=1024
+    )
 
 
 if __name__ == '__main__':

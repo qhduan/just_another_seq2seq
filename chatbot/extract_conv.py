@@ -18,7 +18,7 @@ def make_split(line):
 
 
 def good_line(line):
-    if len(re.findall(r'[a-zA-Z]', ''.join(line))) > 5:
+    if len(re.findall(r'[a-zA-Z0-9]', ''.join(line))) > 4:
         return False
     return True
 
@@ -38,7 +38,10 @@ def main(limit=15, min_limit=5):
     for line in tqdm(fp):
         if line.startswith('M '):
             line = line.replace('\n', '')
-            line = line[2:].split('/')
+            if '/' in line:
+                line = line[2:].split('/')
+            else:
+                line = list(line[2:])
             line = line[:-1]
             group.append(line)
         else: # if line.startswith('E'):
@@ -73,13 +76,13 @@ def main(limit=15, min_limit=5):
             if next_line:
                 x_data.append(line)
                 y_data.append(next_line)
-            if last_line and next_line:
-                x_data.append(last_line + make_split(last_line) + line)
-                y_data.append(next_line)
-            if next_line and next_next_line:
-                x_data.append(line)
-                y_data.append(next_line + make_split(next_line) \
-                    + next_next_line)
+            # if last_line and next_line:
+            #     x_data.append(last_line + make_split(last_line) + line)
+            #     y_data.append(next_line)
+            # if next_line and next_next_line:
+            #     x_data.append(line)
+            #     y_data.append(next_line + make_split(next_line) \
+            #         + next_next_line)
 
     print(len(x_data), len(y_data))
     for ask, answer in zip(x_data[:20], y_data[:20]):
@@ -90,13 +93,15 @@ def main(limit=15, min_limit=5):
     data = list(zip(x_data, y_data))
     data = [
         (x, y) for x, y in data
-        if len(x) < limit and len(y) < limit and len(y) >= min_limit]
+        if len(x) < limit and len(y) < limit and len(y) >= min_limit \
+        and len(x) >= 2
+    ]
     x_data, y_data = zip(*data)
 
     print('fit word_sequence')
 
     ws_input = WordSequence()
-    ws_input.fit(x_data)
+    ws_input.fit(x_data + y_data)
 
     print('dump')
 

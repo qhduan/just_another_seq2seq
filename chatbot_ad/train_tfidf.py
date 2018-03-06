@@ -18,7 +18,7 @@ def main():
 
     vectorizer = TfidfVectorizer(
         min_df=10,
-        analyzer='char', ngram_range=(1, 2))
+        analyzer='char', ngram_range=(2, 3))
 
     vectorizer.fit([
         ''.join(x)

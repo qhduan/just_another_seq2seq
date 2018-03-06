@@ -66,8 +66,13 @@ class WordSequence(object):
         return self.size()
 
 
-    def fit(self, sentences, min_count=5, max_count=None):
+    def fit(self, sentences, min_count=5, max_count=None, max_features=None):
         """训练 WordSequence
+        Args:
+            min_count 最小出现次数
+            max_count 最大出现次数
+            max_features 最大特征数
+
         ws = WordSequence()
         ws.fit([['hello', 'world']])
         """
@@ -94,14 +99,21 @@ class WordSequence(object):
             WordSequence.END_TAG: WordSequence.END,
         }
 
-        for w in sorted(count.keys()):
-            self.dict[w] = len(self.dict)
+        if isinstance(max_features, int):
+            count = sorted(list(count.items()), key=lambda x: x[1])
+            if len(count) > max_features:
+                count = count[-max_features:]
+            for w, _ in count:
+                self.dict[w] = len(self.dict)
+        else:
+            for w in sorted(count.keys()):
+                self.dict[w] = len(self.dict)
 
         self.fited = True
 
 
     def transform(self,
-                  sentence, add_start=False, add_end=False, max_len=None):
+                  sentence, add_end=True, add_start=False, max_len=None):
         """把句子转换为向量
         例如输入 ['a', 'b', 'c']
         输出 [1, 2, 3] 这个数字是字典里的编号，顺序没有意义
@@ -120,17 +132,14 @@ class WordSequence(object):
         #     r = [self.PAD] * len(sentence)
 
         if max_len is not None:
-            r = [self.END] * max_len
+            r = [self.PAD] * max_len
         else:
-            r = [self.END] * len(sentence)
+            r = [self.PAD] * len(sentence)
 
         for index, a in enumerate(sentence):
             if max_len is not None and index >= len(r):
                 break
             r[index] = self.to_index(a)
-
-        if add_end and r[-1] != WordSequence.END and r[-1] != WordSequence.PAD:
-            r[-1] = WordSequence.END
 
         return np.array(r)
 

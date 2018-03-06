@@ -10,7 +10,7 @@ import numpy as np
 import tensorflow as tf
 # import jieba
 from tqdm import tqdm
-# from sklearn.utils import shuffle
+from sklearn.utils import shuffle
 
 sys.path.append('..')
 
@@ -29,7 +29,11 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 1
-    batch_size = 512
+    batch_size = 64
+    x_data, y_data = shuffle(x_data, y_data, random_state=0)
+    x_data = x_data[:100000]
+    y_data = y_data[:100000]
+
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -61,7 +65,8 @@ def test(bidirectional, cell_type, depth,
             use_dropout=use_dropout,
             time_major=time_major,
             hidden_units=hidden_units,
-            optimizer='adadelta',
+            learning_rate=0.001,
+            optimizer='adam',
             dropout=0.4,
             share_embedding=True
         )
@@ -74,7 +79,6 @@ def test(bidirectional, cell_type, depth,
         model_d = Discriminative(
             input_vocab_size=len(ws),
             batch_size=batch_size * 2,
-            learning_rate=0.0001,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -82,9 +86,10 @@ def test(bidirectional, cell_type, depth,
             use_dropout=use_dropout,
             parallel_iterations=32,
             time_major=time_major,
-            hidden_units=hidden_units,
-            optimizer='adadelta',
-            dropout=0.4
+            hidden_units=64,
+            learning_rate=0.001,
+            optimizer='adam',
+            dropout=0.8
         )
         init = tf.global_variables_initializer()
         sess_d = tf.Session(config=config)
@@ -180,7 +185,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'lstm', 2, 'Bahdanau', True, True, True, 256)
+    test(False, 'lstm', 1, 'Bahdanau', False, False, False, 1024)
 
 
 if __name__ == '__main__':

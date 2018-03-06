@@ -32,8 +32,8 @@ def test(bidirectional, cell_type, depth,
     )
 
     # save_path = '/tmp/s2ss_chatbot.ckpt'
-    save_path = './s2ss_chatbot_forward.ckpt'
-    save_path_rl = './s2ss_chatbot_ad.ckpt'
+    save_path = './s2ss_chatbot.ckpt'
+    save_path_rl = './s2ss_chatbot_anti.ckpt'
 
     graph = tf.Graph()
     graph_rl = tf.Graph()
@@ -93,6 +93,7 @@ def test(bidirectional, cell_type, depth,
         x_test = [x_test]
         bar = batch_flow([x_test], [ws], 1)
         x, xl = next(bar)
+        x = np.flip(x, axis=1)
         print(x, xl)
         pred = model_pred.predict(
             sess,
@@ -121,7 +122,16 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'lstm', 2, 'Bahdanau', True, True, True, 256)
+    test(
+        bidirectional=False,
+        cell_type='lstm',
+        depth=1,
+        attention_type='Bahdanau',
+        use_residual=False,
+        use_dropout=False,
+        time_major=False,
+        hidden_units=1024
+    )
 
 
 if __name__ == '__main__':

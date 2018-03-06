@@ -9,6 +9,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
+from sklearn.utils import shuffle
 # import jieba
 
 sys.path.append('..')
@@ -27,6 +28,7 @@ def test(bidirectional, cell_type, depth,
     from discriminative import Discriminative
     from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
+    from threadedgenerator import ThreadedGenerator
 
     x_data, y_data, ws = pickle.load(
         open('chatbot.pkl', 'rb'))
@@ -34,8 +36,11 @@ def test(bidirectional, cell_type, depth,
     vectorizer = pickle.load(open('tfidf.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 2
-    batch_size = 512
+    n_epoch = 5
+    batch_size = 64
+    # x_data, y_data = shuffle(x_data, y_data, random_state=0)
+    # x_data = x_data[:500000]
+    # y_data = y_data[:500000]
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -48,37 +53,37 @@ def test(bidirectional, cell_type, depth,
     forward_path = './s2ss_chatbot_forward.ckpt'
     discriminative_path = './s2ss_chatbot_discriminative.ckpt'
 
-    graph_d = tf.Graph()
-    graph_ad = tf.Graph()
-
     # 读取反向模型 seq2seq(x|y)
-    with graph_d.as_default():
-        random.seed(0)
-        np.random.seed(0)
-        tf.set_random_seed(0)
+    with tf.device('/cpu:0'):
+        graph_d = tf.Graph()
+        with graph_d.as_default():
+            random.seed(0)
+            np.random.seed(0)
+            tf.set_random_seed(0)
 
-        sess_d = tf.Session(config=config)
+            sess_d = tf.Session(config=config)
 
-        model_d = Discriminative(
-            input_vocab_size=len(ws),
-            batch_size=batch_size,
-            learning_rate=0.0001,
-            bidirectional=bidirectional,
-            cell_type=cell_type,
-            depth=depth,
-            use_residual=use_residual,
-            use_dropout=use_dropout,
-            parallel_iterations=32,
-            time_major=time_major,
-            hidden_units=hidden_units,
-            optimizer='adadelta',
-            dropout=0.4
-        )
-        init = tf.global_variables_initializer()
-        sess_d.run(init)
-        model_d.load(sess_d, discriminative_path)
+            model_d = Discriminative(
+                input_vocab_size=len(ws),
+                batch_size=batch_size,
+                bidirectional=bidirectional,
+                cell_type=cell_type,
+                depth=depth,
+                use_residual=use_residual,
+                use_dropout=use_dropout,
+                parallel_iterations=32,
+                time_major=time_major,
+                hidden_units=64,
+                learning_rate=0.001,
+                optimizer='adam',
+                dropout=0.4
+            )
+            init = tf.global_variables_initializer()
+            sess_d.run(init)
+            model_d.load(sess_d, discriminative_path)
 
     # 构建要训练的模型
+    graph_ad = tf.Graph()
     with graph_ad.as_default():
         random.seed(0)
         np.random.seed(0)
@@ -91,7 +96,6 @@ def test(bidirectional, cell_type, depth,
             target_vocab_size=len(ws),
             batch_size=batch_size,
             # beam_width=12,
-            learning_rate=0.0001,
             bidirectional=bidirectional,
             cell_type=cell_type,
             depth=depth,
@@ -99,7 +103,8 @@ def test(bidirectional, cell_type, depth,
             use_residual=use_residual,
             use_dropout=use_dropout,
             hidden_units=hidden_units,
-            optimizer='adadelta',
+            learning_rate=0.001,
+            optimizer='adam',
             dropout=0.4,
             time_major=time_major,
             share_embedding=True
@@ -113,13 +118,9 @@ def test(bidirectional, cell_type, depth,
     # 开始训练
     flow = batch_flow([x_data, y_data], ws, batch_size, raw=True)
 
-    for epoch in range(1, n_epoch + 1):
-        costs = []
-        bar = tqdm(range(steps), total=steps,
-                   desc='epoch {}, loss=0.000000'.format(epoch))
-        for _ in bar:
-
-            x, xl, xraw, y, yl, yraw = next(flow)
+    def flow_data(flow):
+        """包一层"""
+        for x, xl, xraw, y, yl, yraw in flow:
 
             rewards = model_d.predict(sess_d, x, xl, y, yl)
             rewards = rewards[:, 1]
@@ -134,20 +135,52 @@ def test(bidirectional, cell_type, depth,
             tfidfs_sum = np.sum(tfidfs)
 
             def smooth(x):
+                """把数据平整到0.5~1.5左右"""
                 return (0.5 + x) * (2.0/3)
 
             for i in range(batch_size):
                 text = texts[i]
-                rewards[i] = smooth(rewards[i])
-                rewards[i] *= smooth(repeat_reward(text))
-                rewards[i] *= smooth(chinese_reward(text))
-                rewards[i] *= smooth(similarity_reward(''.join(xraw[i]), text))
-                rewards[i] *= smooth(tfidfs[i] / tfidfs_sum * batch_size)
+                base_rewards = rewards[i] # smooth(rewards[i])
+                repeat_rewards = repeat_reward(text) # smooth(repeat_reward(text))
+                chinese_rewards = chinese_reward(text) # smooth(chinese_reward(text))
+                similarity_rewards = similarity_reward(''.join(xraw[i]), text)
+                # smooth(similarity_reward(''.join(xraw[i]), text))
+                tfidf_rewards = tfidfs[i] / tfidfs_sum * batch_size
+                # tfidf_rewards = smooth(
+                #     tfidfs[i] / tfidfs_sum * batch_size)[0][0]
 
+                # print(''.join(xraw[i]))
+                # print(text)
+                # print(
+                #     base_rewards, repeat_rewards,
+                #     chinese_rewards, similarity_rewards,
+                #     tfidf_rewards
+                # )
+
+                rewards[i] = base_rewards
+                rewards[i] *= repeat_rewards
+                # rewards[i] *= chinese_rewards
+                rewards[i] *= similarity_rewards
+                rewards[i] *= tfidf_rewards
+
+                # print(rewards[i])
+                # print('-' * 30)
+            # exit(1)
 
             rewards = rewards.reshape(-1, 1)
+            yield x, xl, y, yl, rewards
 
-            cost = model_ad.train(sess_ad, x, xl, y, yl)#, rewards)
+    new_flow = ThreadedGenerator(flow_data(flow), queue_maxsize=10)
+
+    for epoch in range(1, n_epoch + 1):
+        costs = []
+        bar = tqdm(range(steps), total=steps,
+                   desc='epoch {}, loss=0.000000'.format(epoch))
+        for _ in bar:
+
+            x, xl, y, yl, rewards = next(new_flow)
+
+            cost = model_ad.train(sess_ad, x, xl, y, yl, rewards)
 
             costs.append(cost)
             # lengths.append(np.mean(al))
@@ -197,7 +230,7 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-    test(True, 'lstm', 2, 'Bahdanau', True, True, True, 256)
+    test(False, 'lstm', 1, 'Bahdanau', False, False, False, 1024)
 
 
 if __name__ == '__main__':

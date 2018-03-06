@@ -41,7 +41,9 @@ def transform_sentence(sentence, ws, max_len=None):
     encoded = ws.transform(
         sentence,
         max_len=max_len if max_len is not None else len(sentence))
-    encoded_len = len(encoded)
+    encoded_len = len(sentence) + 1 # add end
+    if encoded_len > len(encoded):
+        encoded_len = len(encoded)
     return encoded, encoded_len
 
 
@@ -89,7 +91,7 @@ def batch_flow(data, ws, batch_size, raw=False):
 
         max_lens = []
         for j in range(len(data)):
-            max_len = max([len(x[j]) for x in data_batch])
+            max_len = max([len(x[j]) for x in data_batch]) + 1
             max_lens.append(max_len)
 
         for d in data_batch:
@@ -108,6 +110,75 @@ def batch_flow(data, ws, batch_size, raw=False):
         yield batches
 
 
+
+def batch_flow_bucket(data, ws, batch_size, raw=False,
+                      n_buckets=5, bucket_ind=1, debug=False):
+    """batch_flow的bucket版本"""
+
+    all_data = list(zip(*data))
+    lengths = sorted(list(set([len(x[bucket_ind]) for x in all_data])))
+    if n_buckets > len(lengths):
+        n_buckets = len(lengths)
+
+    splits = np.array(lengths)[(np.linspace(0, 1, 5, endpoint=False) * len(lengths)).astype(int)].tolist()
+    splits += [np.inf]
+
+    if debug:
+        print(splits)
+
+    ind_data = {}
+    for x in all_data:
+        l = len(x[bucket_ind])
+        for ind, s in enumerate(splits[:-1]):
+            if l >= s and l <= splits[ind + 1]:
+                if ind not in ind_data:
+                    ind_data[ind] = []
+                ind_data[ind].append(x)
+                break
+
+
+    inds = sorted(list(ind_data.keys()))
+    ind_p = [len(ind_data[x]) / len(all_data) for x in inds]
+    if debug:
+        print(np.sum(ind_p), ind_p)
+
+    if isinstance(ws, (list, tuple)):
+        assert len(ws) == len(data), \
+            'len(ws) must equal to len(data) if ws is list or tuple'
+
+    mul = 2
+    if raw:
+        mul = 3
+
+    while True:
+        choice_ind = np.random.choice(inds, p=ind_p)
+        if debug:
+            print('choice_ind', choice_ind)
+        data_batch = random.sample(ind_data[choice_ind], batch_size)
+        batches = [[] for i in range(len(data) * mul)]
+
+        max_lens = []
+        for j in range(len(data)):
+            max_len = max([len(x[j]) for x in data_batch]) + 1
+            max_lens.append(max_len)
+
+        for d in data_batch:
+            for j in range(len(data)):
+                if isinstance(ws, (list, tuple)):
+                    w = ws[j]
+                else:
+                    w = ws
+                x, xl = transform_sentence(d[j], w, max_lens[j])
+                batches[j * mul].append(x)
+                batches[j * mul + 1].append(xl)
+                if raw:
+                    batches[j * mul + 2].append(d[j])
+        batches = [np.asarray(x) for x in batches]
+
+        yield batches
+
+
+
 def test_batch_flow():
     """test batch_flow function"""
     from fake_data import generate
@@ -117,5 +188,17 @@ def test_batch_flow():
     print(x.shape, y.shape, xl.shape, yl.shape)
 
 
+def test_batch_flow_bucket():
+    """test batch_flow function"""
+    from fake_data import generate
+    x_data, y_data, ws_input, ws_target = generate(size=10000)
+    flow = batch_flow_bucket(
+        [x_data, y_data], [ws_input, ws_target], 4,
+        debug=True)
+    for i in range(10):
+        x, xl, y, yl = next(flow)
+        print(x.shape, y.shape, xl.shape, yl.shape)
+
+
 if __name__ == '__main__':
-    test_batch_flow()
+    test_batch_flow_bucket()
