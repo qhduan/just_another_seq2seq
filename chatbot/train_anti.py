@@ -27,7 +27,7 @@ def test(bidirectional, cell_type, depth,
         open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 20
+    n_epoch = 10
     batch_size = 64
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
     # x_data = x_data[:100000]
@@ -94,7 +94,7 @@ def test(bidirectional, cell_type, depth,
                                            dummy_encoder_inputs_lengths,
                                            y, yl, loss_only=True)
 
-                    add_loss *= -0.7
+                    add_loss *= -0.5
                     # print(x, y)
                     cost, lr = model.train(sess, x, xl, y, yl,
                                            return_lr=True, add_loss=add_loss)
@@ -205,7 +205,7 @@ def main():
         depth=2,
         attention_type='Bahdanau',
         use_residual=False,
-        use_dropout=True,
+        use_dropout=False,
         time_major=False,
         hidden_units=512
     )

@@ -128,7 +128,7 @@ def main():
         depth=2,
         attention_type='Bahdanau',
         use_residual=False,
-        use_dropout=True,
+        use_dropout=False,
         time_major=False,
         hidden_units=512
     )
