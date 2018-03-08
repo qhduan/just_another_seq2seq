@@ -9,8 +9,9 @@
 - [x] 相对于其他一些repo，bug可能会少一些
     - 有些repo的实现在不同参数下会有问题：例如有些支持gru不支持lstm，有些不支持bidirectional，有些选择depth > 1的时候会有各种bug之类的，这些问题我都尽量修正了，虽然不保证实现肯定是对的
 - [x] 后续我可能会添加一些中文的例子，例如对联、古诗、闲聊、NER
+- [x] 根据本repo，我会整理一份seq2seq中间的各种trick和实现细节的坑
+    - [参考这里](https://github.com/qhduan/ConversationalRobotDesign/tree/master/%E8%81%8A%E5%A4%A9%E6%9C%BA%E5%99%A8%E4%BA%BA%EF%BC%9A%E7%A5%9E%E7%BB%8F%E5%AF%B9%E8%AF%9D%E6%A8%A1%E5%9E%8B%E7%9A%84%E5%AE%9E%E7%8E%B0%E4%B8%8E%E6%8A%80%E5%B7%A7)
 - [ ] pretrained embedding support
-- [ ] 根据本repo，我会整理一份seq2seq中间的各种trick和实现细节的坑
 - [ ] 后续这个repo会作为一个基础完成一个dialogue system
     - seq2seq模型至少可以作为通用NER实现
     - 截止2018年初，最好的NER应该还是bi-LSTM + CRF，也有不加CRF效果好的
