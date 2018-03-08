@@ -9,7 +9,7 @@ import pickle
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
-from sklearn.utils import shuffle
+# from sklearn.utils import shuffle
 
 sys.path.append('..')
 

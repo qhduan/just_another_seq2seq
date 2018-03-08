@@ -8,8 +8,8 @@ import pickle
 
 import numpy as np
 import tensorflow as tf
-import jieba
-from nltk.tokenize import word_tokenize
+# import jieba
+# from nltk.tokenize import word_tokenize
 
 sys.path.append('..')
 
@@ -85,17 +85,9 @@ def test(bidirectional, cell_type, depth,
             print(ws.inverse_transform(x[0]))
             # print(ws.inverse_transform(pred[0]))
             # print(pred.shape, prob.shape)
-            for i in range(len(pred)):
-                ans = ws.inverse_transform(pred[i])
+            for p in pred:
+                ans = ws.inverse_transform(p)
                 print(ans)
-                # p = prob[i]
-                # if '</s>' in ans:
-                #     print(ans.index('</s>'))
-                #     p = p[:ans.index('</s>')]
-                # pp = 1
-                # for ppp in p:
-                #     pp *= ppp
-                # print(pp, np.mean(p))
 
 
 def main():

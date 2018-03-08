@@ -22,9 +22,6 @@ Another official sequence2sequence model:
 https://github.com/tensorflow/tensor2tensor
 """
 
-
-import math
-
 import numpy as np
 import tensorflow as tf
 from tensorflow import layers
@@ -581,6 +578,13 @@ class SequenceToSequence(object):
                         initializer=self.initializer,
                         dtype=tf.float32
                     )
+
+            # 使用 residual 的时候，对齐输入
+            if self.use_residual:
+                self.decoder_embeddings = tf.layers.dense(
+                    self.decoder_embeddings,
+                    self.hidden_units * 2
+                )
 
             # On Using Very Large Target Vocabulary
             # for Neural Machine Translation

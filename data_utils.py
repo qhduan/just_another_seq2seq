@@ -113,14 +113,20 @@ def batch_flow(data, ws, batch_size, raw=False):
 
 def batch_flow_bucket(data, ws, batch_size, raw=False,
                       n_buckets=5, bucket_ind=1, debug=False):
-    """batch_flow的bucket版本"""
+    """batch_flow的bucket版本
+    多了两重要参数，一个是n_buckets，一个是bucket_ind
+    n_buckets是分成几个buckets，理论上n_buckets == 1时就相当于没有进行buckets操作
+    bucket_ind是指定哪一维度的输入数据作为bucket的依据
+    """
 
     all_data = list(zip(*data))
     lengths = sorted(list(set([len(x[bucket_ind]) for x in all_data])))
     if n_buckets > len(lengths):
         n_buckets = len(lengths)
 
-    splits = np.array(lengths)[(np.linspace(0, 1, 5, endpoint=False) * len(lengths)).astype(int)].tolist()
+    splits = np.array(lengths)[
+        (np.linspace(0, 1, 5, endpoint=False) * len(lengths)).astype(int)
+    ].tolist()
     splits += [np.inf]
 
     if debug:
@@ -195,7 +201,7 @@ def test_batch_flow_bucket():
     flow = batch_flow_bucket(
         [x_data, y_data], [ws_input, ws_target], 4,
         debug=True)
-    for i in range(10):
+    for _ in range(10):
         x, xl, y, yl = next(flow)
         print(x.shape, y.shape, xl.shape, yl.shape)
 

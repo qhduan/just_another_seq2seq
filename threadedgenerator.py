@@ -7,16 +7,11 @@ QHduan
 # A simple generator wrapper, not sure if it's good for anything at all.
 # With basic python threading
 from threading import Thread
-
-try:
-    from queue import Queue
-
-except ImportError:
-    from Queue import Queue
+from queue import Queue
 
 # ... or use multiprocessing versions
 # WARNING: use sentinel based on value, not identity
-from multiprocessing import Process, Queue as MpQueue
+# from multiprocessing import Process, Queue as MpQueue
 
 
 class ThreadedGenerator(object):
@@ -29,9 +24,7 @@ class ThreadedGenerator(object):
     def __init__(self, iterator,
                  sentinel=object(),
                  queue_maxsize=0,
-                 daemon=False,
-                 Thread=Thread,
-                 Queue=Queue):
+                 daemon=False):
         self._iterator = iterator
         self._sentinel = sentinel
         self._queue = Queue(maxsize=queue_maxsize)
@@ -61,7 +54,7 @@ class ThreadedGenerator(object):
                 self._queue.get(timeout=0)
         except KeyboardInterrupt as e:
             raise e
-        except:
+        except: # pylint: disable=bare-except
             pass
         # self._thread.join()
 
@@ -84,6 +77,7 @@ class ThreadedGenerator(object):
 
 
 def test():
+    """测试"""
 
     def gene():
         i = 0
@@ -92,7 +86,7 @@ def test():
             i += 1
     t = gene()
     tt = ThreadedGenerator(t)
-    for i in range(10):
+    for _ in range(10):
         print(next(tt))
     tt.close()
     # for i in range(10):

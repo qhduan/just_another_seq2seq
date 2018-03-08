@@ -13,7 +13,7 @@ import math
 
 import numpy as np
 import tensorflow as tf
-from tensorflow import layers
+# from tensorflow import layers
 from tensorflow.contrib.rnn import LSTMCell
 from tensorflow.contrib.rnn import GRUCell
 from tensorflow.contrib.rnn import MultiRNNCell
@@ -56,6 +56,8 @@ class RNNCRF(object):
                  use_residual=False,
                  optimizer='adam',
                  learning_rate=0.001,
+                 min_learning_rate=1e-6,
+                 decay_steps=500000,
                  max_gradient_norm=5.0,
                  bidirectional=False,
                  output_project_active=None,
@@ -120,6 +122,8 @@ class RNNCRF(object):
         self.mode = mode
         self.optimizer = optimizer
         self.learning_rate = learning_rate
+        self.min_learning_rate = min_learning_rate
+        self.decay_steps = decay_steps
         self.max_gradient_norm = max_gradient_norm
         self.keep_prob = 1.0 - dropout
         self.bidirectional = bidirectional
@@ -174,6 +178,8 @@ class RNNCRF(object):
 
         if self.mode == 'train':
             self.init_optimizer()
+
+        self.saver = tf.train.Saver()
 
 
     def init_placeholders(self):
@@ -300,20 +306,6 @@ class RNNCRF(object):
             self.encoder_inputs_embedded = tf.nn.embedding_lookup(
                 params=self.encoder_embeddings,
                 ids=self.encoder_inputs
-            )
-
-            # Input projection layer to feed embedded inputs to the cell
-            # ** Essential when use_residual=True to match input/output dims
-            # 输入投影层
-            # 如果使用了residual，为了对齐输入和输出层，这里可能必须增加一个投影
-            input_layer = layers.Dense(
-                self.hidden_units, dtype=tf.float32, name='input_projection'
-            )
-            self.input_layer = input_layer
-
-            # Embedded inputs having gone through input projection layer
-            self.encoder_inputs_embedded = input_layer(
-                self.encoder_inputs_embedded
             )
 
             # Encode input sequences into context vectors:
@@ -478,29 +470,13 @@ class RNNCRF(object):
 
     def save(self, sess, save_path='model.ckpt'):
         """保存模型"""
-
-        # if not os.path.exists(save_path):
-        #     os.makedirs(save_path)
-
-        saver = tf.train.Saver()
-        save_path = saver.save(sess,
-                               save_path=save_path) #,
-                               # global_step=self.global_step)
+        self.saver.save(sess, save_path=save_path)
 
 
     def load(self, sess, save_path='model.ckpt'):
         """读取模型"""
-        # if not os.path.exists(save_path):
-        #     print('没有找到模型路径', save_path)
-        #     return
-
         print('try load model from', save_path)
-        # ckpt = tf.train.get_checkpoint_state(save_path)
-        saver = tf.train.Saver()
-        # saver = tf.train.import_meta_graph(save_path)
-        # saver.restore(sess, save_path=ckpt.model_checkpoint_path)
-        # saver = tf.train.import_meta_graph(save_path + '.meta')
-        saver.restore(sess, save_path)
+        self.saver.restore(sess, save_path)
 
 
     def check_feeds(self, encoder_inputs, encoder_inputs_length,
@@ -579,33 +555,41 @@ class RNNCRF(object):
         """初始化优化器
         支持的方法有 sgd, adadelta, adam, rmsprop, momentum
         """
-        # print("setting optimizer..")
-        # Gradients and SGD update operation for training the model
+
+        # 学习率下降算法
+        learning_rate = tf.train.polynomial_decay(
+            self.learning_rate,
+            self.global_step,
+            self.decay_steps,
+            self.min_learning_rate,
+            power=0.5
+        )
+        self.current_learning_rate = learning_rate
+
+        # 设置优化器,合法的优化器如下
         # 'adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'
         trainable_params = tf.trainable_variables()
         if self.optimizer.lower() == 'adadelta':
             self.opt = tf.train.AdadeltaOptimizer(
-                learning_rate=self.learning_rate)
+                learning_rate=learning_rate)
         elif self.optimizer.lower() == 'adam':
             self.opt = tf.train.AdamOptimizer(
-                learning_rate=self.learning_rate)
+                learning_rate=learning_rate)
         elif self.optimizer.lower() == 'rmsprop':
             self.opt = tf.train.RMSPropOptimizer(
-                learning_rate=self.learning_rate)
+                learning_rate=learning_rate)
         elif self.optimizer.lower() == 'momentum':
             self.opt = tf.train.MomentumOptimizer(
-                learning_rate=self.learning_rate, momentum=0.9)
+                learning_rate=learning_rate, momentum=0.9)
         elif self.optimizer.lower() == 'sgd':
             self.opt = tf.train.GradientDescentOptimizer(
-                learning_rate=self.learning_rate)
+                learning_rate=learning_rate)
 
         # Compute gradients of loss w.r.t. all trainable variables
         gradients = tf.gradients(self.loss, trainable_params)
-
         # Clip gradients by a given maximum_gradient_norm
         clip_gradients, _ = tf.clip_by_global_norm(
             gradients, self.max_gradient_norm)
-
         # Update the model
         self.updates = self.opt.apply_gradients(
             zip(clip_gradients, trainable_params),

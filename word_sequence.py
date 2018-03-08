@@ -101,8 +101,8 @@ class WordSequence(object):
 
         if isinstance(max_features, int):
             count = sorted(list(count.items()), key=lambda x: x[1])
-            if len(count) > max_features:
-                count = count[-max_features:]
+            if max_features is not None and len(count) > max_features:
+                count = count[-int(max_features):]
             for w, _ in count:
                 self.dict[w] = len(self.dict)
         else:
