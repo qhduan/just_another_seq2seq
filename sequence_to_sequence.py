@@ -69,7 +69,6 @@ class SequenceToSequence(object):
                  mode='train',
                  hidden_units=256,
                  depth=1,
-                 attn_input_feeding=False,
                  beam_width=0,
                  cell_type='lstm',
                  dropout=0.2,
@@ -83,11 +82,11 @@ class SequenceToSequence(object):
                  max_decode_step=None,
                  attention_type='Bahdanau',
                  bidirectional=False,
-                 alignment_history=False,
                  time_major=False,
                  seed=0,
                  parallel_iterations=None,
-                 share_embedding=False):
+                 share_embedding=False,
+                 pretrained_embedding=False):
         """保存参数变量，开始构建整个模型
         Args:
             input_vocab_size: 输入词表大小
@@ -99,7 +98,6 @@ class SequenceToSequence(object):
                 RNN模型的中间层大小，encoder和decoder层相同
                 如果encoder层是bidirectional的话，decoder层是双倍大小
             depth: encoder和decoder的rnn层数
-            attn_input_feeding: 输入给 attention 层的时候，是否使用一个投影层
             beam_width:
                 beam_width是beamsearch的超参，用于解码
                 如果大于0则使用beamsearch，小于等于0则不使用
@@ -115,9 +113,6 @@ class SequenceToSequence(object):
                 None的情况下默认是encoder输入最大长度的 4 倍
             attention_type: 'Bahdanau' or 'Luong' 不同的 attention 类型
             bidirectional: encoder 是否为双向
-            alignment_history:
-                是否记录alignment历史，用于查看attention热力图
-                详情可以参考 test_atten.py 文件中显示热力图的代码
             time_major:
                 是否在“计算过程”中使用时间为主的批量数据
                 注意，改变这个参数并不要求改变输入数据的格式
@@ -145,8 +140,7 @@ class SequenceToSequence(object):
         self.embedding_size = embedding_size
         self.hidden_units = hidden_units
         self.depth = depth
-        self.attn_input_feeding = attn_input_feeding
-        self.cell_type = cell_type
+        self.cell_type = cell_type.lower()
         self.use_dropout = use_dropout
         self.use_residual = use_residual
         self.attention_type = attention_type
@@ -159,6 +153,7 @@ class SequenceToSequence(object):
         self.keep_prob = 1.0 - dropout
         self.bidirectional = bidirectional
         self.seed = seed
+        self.pretrained_embedding = pretrained_embedding
         if isinstance(parallel_iterations, int):
             self.parallel_iterations = parallel_iterations
         else: # if parallel_iterations is None:
@@ -175,6 +170,9 @@ class SequenceToSequence(object):
         )
         # self.initializer = None
 
+        assert self.cell_type in ('gru', 'lstm'), \
+            'cell_type 应该是 GRU 或者 LSTM'
+
         if share_embedding:
             assert input_vocab_size == target_vocab_size, \
                 '如果打开 share_embedding，两个vocab_size必须一样'
@@ -189,7 +187,7 @@ class SequenceToSequence(object):
             '''.format(attention_type)
 
         assert beam_width < target_vocab_size, \
-            'beam_width {} must < target vocab size {}'.format(
+            'beam_width {} 应该小于 target vocab size {}'.format(
                 beam_width, target_vocab_size
             )
 
@@ -208,13 +206,6 @@ class SequenceToSequence(object):
         self.use_beamsearch_decode = True if self.beam_width > 0 else False
         self.max_decode_step = max_decode_step
 
-        self.alignment_history = alignment_history
-
-        assert (self.use_beamsearch_decode and not self.alignment_history) or \
-            (not self.use_beamsearch_decode and self.alignment_history) or \
-            (not self.use_beamsearch_decode and not self.alignment_history), \
-            'beamsearch和alignment_history不能同时打开'
-
         assert self.optimizer.lower() in \
             ('adadelta', 'adam', 'rmsprop', 'momentum', 'sgd'), \
             'optimizer 必须是下列之一： adadelta, adam, rmsprop, momentum, sgd'
@@ -230,8 +221,8 @@ class SequenceToSequence(object):
         优化器（只在训练时构建，optimizer）
         """
         self.init_placeholders()
-        self.build_encoder()
-        self.build_decoder()
+        encoder_outputs, encoder_state = self.build_encoder()
+        self.build_decoder(encoder_outputs, encoder_state)
 
         if self.mode == 'train':
             self.init_optimizer()
@@ -268,6 +259,7 @@ class SequenceToSequence(object):
             # 训练模式
 
             # 解码器输入，shape=(batch_size, time_step)
+            # 注意，会默认里面已经在每句结尾包含 <EOS>
             self.decoder_inputs = tf.placeholder(
                 dtype=tf.int32,
                 shape=(self.batch_size, None),
@@ -299,21 +291,6 @@ class SequenceToSequence(object):
                 self.decoder_inputs
             ], axis=1)
 
-            self.decoder_targets_train = self.decoder_inputs
-            self.decoder_inputs_length_train = self.decoder_inputs_length
-
-            # 被我废弃
-            # self.decoder_end_token = tf.ones(
-            #     shape=(self.batch_size, 1),
-            #     dtype=tf.int32
-            # ) * WordSequence.END
-            # 这里需要 + 1，因为会自动给训练结果增加 end_token
-            # 实际训练的解码器目标，实际上是 decoder_inputs + end_token
-            # self.decoder_targets_train = tf.concat([
-            #     self.decoder_inputs,
-            #     self.decoder_end_token
-            # ], axis=1)
-
 
     def build_single_cell(self, n_hidden, use_residual):
         """构建一个单独的rnn cell
@@ -322,7 +299,7 @@ class SequenceToSequence(object):
             use_residual: 是否使用residual wrapper
         """
 
-        if self.cell_type.lower() == 'gru':
+        if self.cell_type == 'gru':
             cell_type = GRUCell
         else:
             cell_type = LSTMCell
@@ -354,22 +331,60 @@ class SequenceToSequence(object):
         ])
 
 
+    def feed_embedding(self, sess, encoder=None, decoder=None):
+        """加载预训练好的embedding
+        """
+        assert self.pretrained_embedding, \
+            '必须开启pretrained_embedding才能使用feed_embedding'
+        assert encoder is not None or decoder is not None, \
+            'encoder 和 decoder 至少得输入一个吧大佬！'
+
+        if encoder is not None:
+            sess.run(self.encoder_embeddings_init,
+                     {self.encoder_embeddings_placeholder: encoder})
+
+        if decoder is not None:
+            sess.run(self.decoder_embeddings_init,
+                     {self.decoder_embeddings_placeholder: decoder})
+
+
     def build_encoder(self):
         """构建编码器
         """
         # print("构建编码器")
         with tf.variable_scope('encoder'):
             # 构建 encoder_cell
-            self.encoder_cell = self.build_encoder_cell()
+            encoder_cell = self.build_encoder_cell()
 
             # 编码器的embedding
             with tf.device(_get_embed_device(self.input_vocab_size)):
-                self.encoder_embeddings = tf.get_variable(
-                    name='embedding',
-                    shape=(self.input_vocab_size, self.embedding_size),
-                    initializer=self.initializer,
-                    dtype=tf.float32
-                )
+
+                # 加载训练好的embedding
+                if self.pretrained_embedding:
+
+                    self.encoder_embeddings = tf.Variable(
+                        tf.constant(
+                            0.0,
+                            shape=(self.input_vocab_size, self.embedding_size)
+                        ),
+                        trainable=False,
+                        name='embeddings'
+                    )
+                    self.encoder_embeddings_placeholder = tf.placeholder(
+                        tf.float32,
+                        (self.input_vocab_size, self.embedding_size)
+                    )
+                    self.encoder_embeddings_init = \
+                        self.encoder_embeddings.assign(
+                            self.encoder_embeddings_placeholder)
+
+                else:
+                    self.encoder_embeddings = tf.get_variable(
+                        name='embedding',
+                        shape=(self.input_vocab_size, self.embedding_size),
+                        initializer=self.initializer,
+                        dtype=tf.float32
+                    )
 
             # embedded之后的输入 shape = (batch_size, time_step, embedding_size)
             self.encoder_inputs_embedded = tf.nn.embedding_lookup(
@@ -388,10 +403,10 @@ class SequenceToSequence(object):
             if not self.bidirectional:
                 # 单向 RNN
                 (
-                    self.encoder_outputs,
-                    self.encoder_last_state
+                    encoder_outputs,
+                    encoder_state
                 ) = tf.nn.dynamic_rnn(
-                    cell=self.encoder_cell,
+                    cell=encoder_cell,
                     inputs=inputs,
                     sequence_length=self.encoder_inputs_length,
                     dtype=tf.float32,
@@ -399,15 +414,17 @@ class SequenceToSequence(object):
                     parallel_iterations=self.parallel_iterations,
                     swap_memory=True
                 )
+
+                return encoder_outputs, encoder_state
             else:
                 # 双向 RNN 比较麻烦
-                self.encoder_cell_bw = self.build_encoder_cell()
+                encoder_cell_bw = self.build_encoder_cell()
                 (
                     (encoder_fw_outputs, encoder_bw_outputs),
                     (encoder_fw_state, encoder_bw_state)
                 ) = tf.nn.bidirectional_dynamic_rnn(
-                    cell_fw=self.encoder_cell,
-                    cell_bw=self.encoder_cell_bw,
+                    cell_fw=encoder_cell,
+                    cell_bw=encoder_cell_bw,
                     inputs=inputs,
                     sequence_length=self.encoder_inputs_length,
                     dtype=tf.float32,
@@ -417,147 +434,110 @@ class SequenceToSequence(object):
                 )
 
                 # 首先合并两个方向 RNN 的输出
-                self.encoder_outputs = tf.concat(
+                encoder_outputs = tf.concat(
                     (encoder_fw_outputs, encoder_bw_outputs), 2)
 
-                # 在 bidirectional 的情况下合并 state
-                # QHD
-                # borrow from
-                # https://github.com/ematvey/tensorflow-seq2seq-tutorials/blob/master/model_new.py
-                # 对上面链接中的代码有修改，因为原代码没有考虑多层cell的情况(MultiRNNCell)
-                if isinstance(encoder_fw_state[0], LSTMStateTuple):
-                    # LSTM 的 cell
-                    self.encoder_last_state = tuple([
-                        LSTMStateTuple(
-                            c=tf.concat((
-                                encoder_fw_state[i].c,
-                                encoder_bw_state[i].c
-                            ), 1),
-                            h=tf.concat((
-                                encoder_fw_state[i].h,
-                                encoder_bw_state[i].h
-                            ), 1)
-                        )
-                        for i in range(len(encoder_fw_state))
-                    ])
-                elif isinstance(encoder_fw_state[0], tf.Tensor):
-                    # GRU 的中间状态只有一个，所以类型是 tf.Tensor
-                    # 分别合并(concat)就可以了
-                    self.encoder_last_state = tuple([
-                        tf.concat(
-                            (encoder_fw_state[i], encoder_bw_state[i]),
-                            1, name='bidirectional_concat_{}'.format(i)
-                        )
-                        for i in range(len(encoder_fw_state))
-                    ])
+                encoder_state = []
+                for i in range(self.depth):
+                    encoder_state.append(encoder_fw_state[i])
+                    encoder_state.append(encoder_bw_state[i])
+                encoder_state = tuple(encoder_state)
+
+                return encoder_outputs, encoder_state
 
 
-    def build_decoder_cell(self):
+    def build_decoder_cell(self, encoder_outputs, encoder_state):
         """构建解码器cell"""
 
-        encoder_outputs = self.encoder_outputs
-        encoder_last_state = self.encoder_last_state
         encoder_inputs_length = self.encoder_inputs_length
+        batch_size = self.batch_size
+
+        if self.bidirectional:
+            encoder_state = encoder_state[-self.depth:]
 
         if self.time_major:
             encoder_outputs = tf.transpose(encoder_outputs, (1, 0, 2))
 
         # 使用 BeamSearchDecoder 的时候，必须根据 beam_width 来成倍的扩大一些变量
-        # encoder_outputs, encoder_last_state, encoder_inputs_length
+        # encoder_outputs, encoder_state, encoder_inputs_length
         # needs to be tiled so that:
         # [batch_size, .., ..] -> [batch_size x beam_width, .., ..]
         if self.use_beamsearch_decode:
-
             encoder_outputs = seq2seq.tile_batch(
                 encoder_outputs, multiplier=self.beam_width)
-            encoder_last_state = nest.map_structure(
-                lambda s: seq2seq.tile_batch(s, self.beam_width),
-                self.encoder_last_state)
+            encoder_state = seq2seq.tile_batch(
+                encoder_state, multiplier=self.beam_width)
             encoder_inputs_length = seq2seq.tile_batch(
                 self.encoder_inputs_length, multiplier=self.beam_width)
-
-        # 计算解码器的隐藏神经元数，如果编码器是 bidirectional 的
-        # 那么解码器的一些隐藏神经元应该乘 2
-        num_units = self.hidden_units
-        if self.bidirectional:
-            num_units *= 2
+            # 如果使用了 beamsearch 那么输入应该是 beam_width 倍于 batch_size 的
+            batch_size *= self.beam_width
 
         # 下面是两种不同的 Attention 机制
         if self.attention_type.lower() == 'luong':
             # 'Luong' style attention: https://arxiv.org/abs/1508.04025
             self.attention_mechanism = LuongAttention(
-                num_units=num_units,
+                num_units=self.hidden_units,
                 memory=encoder_outputs,
                 memory_sequence_length=encoder_inputs_length
             )
         else: # Default Bahdanau
             # 'Bahdanau' style attention: https://arxiv.org/abs/1409.0473
             self.attention_mechanism = BahdanauAttention(
-                num_units=num_units,
+                num_units=self.hidden_units,
                 memory=encoder_outputs,
                 memory_sequence_length=encoder_inputs_length
             )
 
         # Building decoder_cell
-        self.decoder_cell_list = [
+        cell = MultiRNNCell([
             self.build_single_cell(
-                num_units,
+                self.hidden_units,
                 use_residual=self.use_residual
             )
-            for i in range(self.depth)
-        ]
+            for _ in range(self.depth)
+        ])
 
-        decoder_initial_state = encoder_last_state
+        # 在非训练（预测）模式，并且没开启 beamsearch 的时候，打开 attention 历史信息
+        alignment_history = (
+            not self.mode == 'train' and not self.use_beamsearch_decode
+        )
 
-        def attn_decoder_input_fn(inputs, attention):
+        def cell_input_fn(inputs, attention):
             """根据attn_input_feeding属性来判断是否在attention计算前进行一次投影计算
             """
-            if not self.attn_input_feeding:
-                return inputs
+            if not self.use_residual:
+                return array_ops.concat([inputs, attention], -1)
 
-            # Essential when use_residual=True
-            hidden_units = self.hidden_units
-            if self.bidirectional:
-                hidden_units *= 2
-            attn_projection = layers.Dense(hidden_units,
+            attn_projection = layers.Dense(self.hidden_units,
                                            dtype=tf.float32,
-                                           # use_bias=False,
-                                           name='attn_input_feeding')
+                                           use_bias=False,
+                                           name='attention_cell_input_fn')
             return attn_projection(array_ops.concat([inputs, attention], -1))
 
-        # AttentionWrapper wraps RNNCell with the attention_mechanism
-        # Note: We implement Attention mechanism only on the top decoder layer
-        self.decoder_cell_list[-1] = AttentionWrapper(
-            cell=self.decoder_cell_list[-1],
+        cell = AttentionWrapper(
+            cell=cell,
             attention_mechanism=self.attention_mechanism,
-            # attention_layer_size=self.hidden_units,
-            attention_layer_size=int(num_units / 2),
-            cell_input_fn=attn_decoder_input_fn,
-            initial_cell_state=encoder_last_state[-1],
-            alignment_history=self.alignment_history,
+            attention_layer_size=self.hidden_units,
+            alignment_history=alignment_history,
+            cell_input_fn=cell_input_fn,
             name='Attention_Wrapper')
 
-        # To be compatible with AttentionWrapper, the encoder last state
-        # of the top layer should be converted
-        # into the AttentionWrapperState form
-        # We can easily do this by calling AttentionWrapper.zero_state
+        # 空状态
+        decoder_initial_state = cell.zero_state(
+            batch_size, tf.float32)
 
-        # Also if beamsearch decoding is used,
-        # the batch_size argument in .zero_state
-        # should be ${decoder_beam_width} times to the origianl batch_size
-        # 如果使用了 beamsearch 那么输入应该是 beam_width 倍于 batch_size 的
-        batch_size = self.batch_size if not self.use_beamsearch_decode \
-                     else self.batch_size * self.beam_width
-        initial_state = [state for state in encoder_last_state]
+        # 传递encoder状态
+        decoder_initial_state = decoder_initial_state.clone(
+            cell_state=encoder_state)
 
-        initial_state[-1] = self.decoder_cell_list[-1].zero_state(
-            batch_size=batch_size, dtype=tf.float32)
-        decoder_initial_state = tuple(initial_state)
+        # if self.use_beamsearch_decode:
+        #     decoder_initial_state = seq2seq.tile_batch(
+        #         decoder_initial_state, multiplier=self.beam_width)
 
-        return MultiRNNCell(self.decoder_cell_list), decoder_initial_state
+        return cell, decoder_initial_state
 
 
-    def build_decoder(self):
+    def build_decoder(self, encoder_outputs, encoder_state):
         """构建解码器
         """
         with tf.variable_scope('decoder') as decoder_scope:
@@ -565,13 +545,31 @@ class SequenceToSequence(object):
             (
                 self.decoder_cell,
                 self.decoder_initial_state
-            ) = self.build_decoder_cell()
+            ) = self.build_decoder_cell(encoder_outputs, encoder_state)
 
             # 解码器embedding
-            if self.share_embedding:
-                self.decoder_embeddings = self.encoder_embeddings
-            else:
-                with tf.device(_get_embed_device(self.target_vocab_size)):
+            with tf.device(_get_embed_device(self.target_vocab_size)):
+                if self.share_embedding:
+                    self.decoder_embeddings = self.encoder_embeddings
+                elif self.pretrained_embedding:
+
+                    self.decoder_embeddings = tf.Variable(
+                        tf.constant(
+                            0.0,
+                            shape=(self.target_vocab_size,
+                                   self.embedding_size)
+                        ),
+                        trainable=False,
+                        name='embeddings'
+                    )
+                    self.decoder_embeddings_placeholder = tf.placeholder(
+                        tf.float32,
+                        (self.target_vocab_size, self.embedding_size)
+                    )
+                    self.decoder_embeddings_init = \
+                        self.decoder_embeddings.assign(
+                            self.decoder_embeddings_placeholder)
+                else:
                     self.decoder_embeddings = tf.get_variable(
                         name='embeddings',
                         shape=(self.target_vocab_size, self.embedding_size),
@@ -579,27 +577,10 @@ class SequenceToSequence(object):
                         dtype=tf.float32
                     )
 
-            # 使用 residual 的时候，对齐输入
-            if self.use_residual:
-                self.decoder_embeddings = tf.layers.dense(
-                    self.decoder_embeddings,
-                    self.hidden_units * 2
-                )
-
-            # On Using Very Large Target Vocabulary
-            # for Neural Machine Translation
-            # https://arxiv.org/pdf/1412.2007v2.pdf
-
-            # Input projection layer to feed embedded inputs to the cell
-            # ** Essential when use_residual=True to match input/output dims
-            hidden_units = self.hidden_units
-            if self.bidirectional:
-                hidden_units *= 2
-
             self.decoder_output_projection = layers.Dense(
                 self.target_vocab_size,
                 dtype=tf.float32,
-                # use_bias=False,
+                use_bias=False,
                 name='decoder_output_projection'
             )
 
@@ -620,7 +601,7 @@ class SequenceToSequence(object):
 
                 training_helper = seq2seq.TrainingHelper(
                     inputs=inputs,
-                    sequence_length=self.decoder_inputs_length_train,
+                    sequence_length=self.decoder_inputs_length,
                     time_major=self.time_major,
                     name='training_helper'
                 )
@@ -637,7 +618,7 @@ class SequenceToSequence(object):
 
                 # Maximum decoder time_steps in current batch
                 max_decoder_length = tf.reduce_max(
-                    self.decoder_inputs_length_train
+                    self.decoder_inputs_length
                 )
 
                 # decoder_outputs_train: BasicDecoderOutput
@@ -677,7 +658,7 @@ class SequenceToSequence(object):
                 # masks: masking for valid and padded time steps,
                 # [batch_size, max_time_step + 1]
                 self.masks = tf.sequence_mask(
-                    lengths=self.decoder_inputs_length_train,
+                    lengths=self.decoder_inputs_length,
                     maxlen=max_decoder_length,
                     dtype=tf.float32, name='masks'
                 )
@@ -697,14 +678,17 @@ class SequenceToSequence(object):
 
                 # 下面的一些变量用于特殊的学习训练
                 # 自定义rewards，其实我这里是修改了masks
+                # train_entropy = cross entropy
                 self.train_entropy = \
                     tf.nn.sparse_softmax_cross_entropy_with_logits(
-                        labels=self.decoder_targets_train,
+                        labels=self.decoder_inputs,
                         logits=decoder_logits_train)
+
                 self.masks_rewards = self.masks * self.rewards
+
                 self.loss_rewards = seq2seq.sequence_loss(
                     logits=decoder_logits_train,
-                    targets=self.decoder_targets_train,
+                    targets=self.decoder_inputs,
                     weights=self.masks_rewards,
                     average_across_timesteps=True,
                     average_across_batch=True,
@@ -712,7 +696,7 @@ class SequenceToSequence(object):
 
                 self.loss = seq2seq.sequence_loss(
                     logits=decoder_logits_train,
-                    targets=self.decoder_targets_train,
+                    targets=self.decoder_inputs,
                     weights=self.masks,
                     average_across_timesteps=True,
                     average_across_batch=True,
@@ -794,6 +778,7 @@ class SequenceToSequence(object):
                 #     namedtuple(scores, predicted_ids, parent_ids)
 
                 # 官方文档提到的一个潜在的最大长度选择
+                # 我这里改为 * 4
                 # maximum_iterations = tf.round(tf.reduce_max(source_sequence_length) * 2)
                 # https://www.tensorflow.org/tutorials/seq2seq
 
@@ -1072,7 +1057,9 @@ class SequenceToSequence(object):
 
     def entropy(self, sess, encoder_inputs, encoder_inputs_length,
                 decoder_inputs, decoder_inputs_length):
-        """获取针对一组输入输出的entropy"""
+        """获取针对一组输入输出的entropy
+        相当于在计算P(target|source)
+        """
         input_feed = self.check_feeds(
             encoder_inputs, encoder_inputs_length,
             decoder_inputs, decoder_inputs_length,
@@ -1096,16 +1083,11 @@ class SequenceToSequence(object):
 
         input_feed[self.keep_prob_placeholder.name] = 1.0
 
+        # Attention 输出
         if attention:
 
-            if self.use_beamsearch_decode:
-
-                pred, atten = sess.run([
-                    self.decoder_pred_decode,
-                    self.final_state[1].alignment_history.stack()
-                ], input_feed)
-
-                return pred[:, 0], atten
+            assert not self.use_beamsearch_decode, \
+                'Attention 模式不能打开 BeamSearch'
 
             pred, atten = sess.run([
                 self.decoder_pred_decode,
@@ -1114,8 +1096,7 @@ class SequenceToSequence(object):
 
             return pred, atten
 
-        # else:
-
+        # BeamSearch 模式输出
         if self.use_beamsearch_decode:
             pred, beam_prob = sess.run([
                 self.decoder_pred_decode, self.beam_prob
@@ -1131,6 +1112,7 @@ class SequenceToSequence(object):
             # return np.array(ret)
             #
 
+        # 普通（Greedy）模式输出
         pred, = sess.run([
             self.decoder_pred_decode
         ], input_feed)

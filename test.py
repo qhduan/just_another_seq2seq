@@ -21,15 +21,15 @@ def test(bidirectional, cell_type, depth,
     """测试不同参数在生成的假数据上的运行结果"""
 
     # 获取一些假数据
-    x_data, y_data, ws_input, ws_target = generate(size=10000)
+    x_data, y_data, ws_input, ws_target = generate(size=1000)
 
     # 训练部分
 
     split = int(len(x_data) * 0.8)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 2
-    batch_size = 32
+    n_epoch = 1
+    batch_size = 8
     steps = int(len(x_train) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -178,13 +178,13 @@ def main():
     tf.set_random_seed(0)
 
     params = OrderedDict((
-        ('bidirectional', (True, False)),
         ('cell_type', ('gru', 'lstm')),
-        ('depth', (1, 2, 3)),
         ('attention_type', ('Luong', 'Bahdanau')),
-        ('use_residual', (True, False)),
         ('use_dropout', (True, False)),
-        ('time_major', (True, False))
+        ('time_major', (True, False)),
+        ('depth', (1, 2, 3)),
+        ('bidirectional', (True, False)),
+        ('use_residual', (True, False)),
     ))
 
     loop = itertools.product(*params.values())

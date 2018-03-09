@@ -23,6 +23,8 @@ def test(bidirectional, cell_type, depth,
     from word_sequence import WordSequence # pylint: disable=unused-variable
     from threadedgenerator import ThreadedGenerator
 
+    emb = pickle.load(open('emb.pkl', 'rb'))
+
     x_data, y_data, ws = pickle.load(
         open('chatbot.pkl', 'rb'))
 
@@ -65,10 +67,14 @@ def test(bidirectional, cell_type, depth,
                 learning_rate=0.001,
                 optimizer='adam',
                 share_embedding=True,
-                dropout=0.2
+                dropout=0.2,
+                pretrained_embedding=True
             )
             init = tf.global_variables_initializer()
             sess.run(init)
+
+            # 加载训练好的embedding
+            model.feed_embedding(sess, encoder=emb)
 
             # print(sess.run(model.input_layer.kernel))
             # exit(1)
@@ -128,7 +134,8 @@ def test(bidirectional, cell_type, depth,
         parallel_iterations=1,
         learning_rate=0.001,
         optimizer='adam',
-        share_embedding=True
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -170,7 +177,8 @@ def test(bidirectional, cell_type, depth,
         parallel_iterations=1,
         learning_rate=0.001,
         optimizer='adam',
-        share_embedding=True
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 

@@ -4,6 +4,8 @@
 import re
 import sys
 import pickle
+import jieba
+import numpy as np
 from tqdm import tqdm
 
 sys.path.append('..')
@@ -18,12 +20,14 @@ def make_split(line):
 
 
 def good_line(line):
+    """判断一个句子是否好"""
     if len(re.findall(r'[a-zA-Z0-9]', ''.join(line))) > 2:
         return False
     return True
 
 
 def regular(sen):
+    """整理句子"""
     sen = re.sub(r'\.{3,100}', '…', sen)
     sen = re.sub(r'…{2,100}', '…', sen)
     sen = re.sub(r'[,]{1,100}', '，', sen)
@@ -40,6 +44,9 @@ def main(limit=20, x_limit=3, y_limit=6):
     """
     from word_sequence import WordSequence
 
+    print('load pretrained vec')
+    word_vec = pickle.load(open('word_vec.pkl', 'rb'))
+
     print('extract lines')
     fp = open('dgk_shooter_min.conv', 'r', errors='ignore')
     last_line = None
@@ -53,7 +60,7 @@ def main(limit=20, x_limit=3, y_limit=6):
             else:
                 line = list(line[2:])
             line = line[:-1]
-            group.append(list(regular(''.join(line))))
+            group.append(jieba.lcut(regular(''.join(line))))
         else: # if line.startswith('E'):
             last_line = None
             if group:
@@ -111,16 +118,41 @@ def main(limit=20, x_limit=3, y_limit=6):
     ]
     x_data, y_data = zip(*data)
 
+    print('refine train data')
+
+    train_data = x_data + y_data
+    good_train_data = []
+    for line in tqdm(train_data):
+        good_train_data.append([
+            x for x in line
+            if x in word_vec
+        ])
+
     print('fit word_sequence')
 
     ws_input = WordSequence()
-    ws_input.fit(x_data + y_data)
 
-    print('dump')
+    ws_input.fit(good_train_data)
+
+    print('dump word_sequence')
 
     pickle.dump(
         (x_data, y_data, ws_input),
         open('chatbot.pkl', 'wb')
+    )
+
+    print('make embedding vecs')
+
+    emb = np.zeros((len(ws_input), len(word_vec['</s>'])))
+
+    for word, ind in ws_input.dict.items():
+        emb[ind] = word_vec[word]
+
+    print('dump emb')
+
+    pickle.dump(
+        emb,
+        open('emb.pkl', 'wb')
     )
 
     print('done')

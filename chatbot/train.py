@@ -188,7 +188,7 @@ def main():
     np.random.seed(0)
     tf.set_random_seed(0)
     test(
-        bidirectional=False,
+        bidirectional=True,
         cell_type='lstm',
         depth=2,
         attention_type='Bahdanau',

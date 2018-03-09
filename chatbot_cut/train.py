@@ -23,6 +23,8 @@ def test(bidirectional, cell_type, depth,
     from word_sequence import WordSequence # pylint: disable=unused-variable
     from threadedgenerator import ThreadedGenerator
 
+    emb = pickle.load(open('emb.pkl', 'rb'))
+
     x_data, y_data, ws = pickle.load(
         open('chatbot.pkl', 'rb'))
 
@@ -30,8 +32,8 @@ def test(bidirectional, cell_type, depth,
     n_epoch = 10
     batch_size = 64
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
-    # x_data = x_data[:100000]
-    # y_data = y_data[:100000]
+    # x_data = x_data[:10000]
+    # y_data = y_data[:10000]
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -40,7 +42,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = './s2ss_chatbot_anti.ckpt'
+    save_path = './s2ss_chatbot.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -65,10 +67,14 @@ def test(bidirectional, cell_type, depth,
                 learning_rate=0.001,
                 optimizer='adam',
                 share_embedding=True,
-                dropout=0.2
+                dropout=0.2,
+                pretrained_embedding=True
             )
             init = tf.global_variables_initializer()
             sess.run(init)
+
+            # 加载训练好的embedding
+            model.feed_embedding(sess, encoder=emb)
 
             # print(sess.run(model.input_layer.kernel))
             # exit(1)
@@ -77,10 +83,6 @@ def test(bidirectional, cell_type, depth,
                 batch_flow([x_data, y_data], ws, batch_size),
                 queue_maxsize=30)
 
-            dummy_encoder_inputs = np.array([
-                np.array([WordSequence.PAD]) for _ in range(batch_size)])
-            dummy_encoder_inputs_lengths = np.array([1] * batch_size)
-
             for epoch in range(1, n_epoch + 1):
                 costs = []
                 bar = tqdm(range(steps), total=steps,
@@ -88,16 +90,8 @@ def test(bidirectional, cell_type, depth,
                 for _ in bar:
                     x, xl, y, yl = next(flow)
                     x = np.flip(x, axis=1)
-
-                    add_loss = model.train(sess,
-                                           dummy_encoder_inputs,
-                                           dummy_encoder_inputs_lengths,
-                                           y, yl, loss_only=True)
-
-                    add_loss *= -0.5
                     # print(x, y)
-                    cost, lr = model.train(sess, x, xl, y, yl,
-                                           return_lr=True, add_loss=add_loss)
+                    cost, lr = model.train(sess, x, xl, y, yl, return_lr=True)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f} lr={:.6f}'.format(
                         epoch,
@@ -128,7 +122,8 @@ def test(bidirectional, cell_type, depth,
         parallel_iterations=1,
         learning_rate=0.001,
         optimizer='adam',
-        share_embedding=True
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -170,7 +165,8 @@ def test(bidirectional, cell_type, depth,
         parallel_iterations=1,
         learning_rate=0.001,
         optimizer='adam',
-        share_embedding=True
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 
