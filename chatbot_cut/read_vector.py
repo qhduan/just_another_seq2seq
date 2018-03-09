@@ -1,4 +1,15 @@
+"""
+读取一个文本格式的，保存预训练好的embedding的文件
 
+wiki.zh.vec
+
+它的第一行会被忽略
+第二行开始，每行是 词 + 空格 + 词向量维度0 + 空格 + 词向量维度1 + ...
+
+参考fasttext的文本格式
+
+https://github.com/facebookresearch/fastText/blob/master/pretrained-vectors.md
+"""
 
 import pickle
 import numpy as np
@@ -6,6 +17,16 @@ from tqdm import tqdm
 
 
 def read_vector(path='wiki.zh.vec', output_path='word_vec.pkl'):
+    """
+    读取文本文件 path 中的数据，并且生成一个 dict 写入到 output_path
+
+    格式：
+    word_vec = {
+        'word_1': np.array(vec_of_word_1),
+        'word_2': np.array(vec_of_word_2),
+        ...
+    }
+    """
     fp = open(path, 'r')
     word_vec = {}
     first_skip = False

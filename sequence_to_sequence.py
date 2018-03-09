@@ -25,7 +25,7 @@ https://github.com/tensorflow/tensor2tensor
 import numpy as np
 import tensorflow as tf
 from tensorflow import layers
-from tensorflow.python.util import nest
+# from tensorflow.python.util import nest
 from tensorflow.python.ops import array_ops
 from tensorflow.contrib import seq2seq
 from tensorflow.contrib.seq2seq import BahdanauAttention
@@ -37,7 +37,7 @@ from tensorflow.contrib.rnn import GRUCell
 from tensorflow.contrib.rnn import MultiRNNCell
 from tensorflow.contrib.rnn import DropoutWrapper
 from tensorflow.contrib.rnn import ResidualWrapper
-from tensorflow.contrib.rnn import LSTMStateTuple
+# from tensorflow.contrib.rnn import LSTMStateTuple
 
 from word_sequence import WordSequence
 from data_utils import _get_embed_device
@@ -414,8 +414,6 @@ class SequenceToSequence(object):
                     parallel_iterations=self.parallel_iterations,
                     swap_memory=True
                 )
-
-                return encoder_outputs, encoder_state
             else:
                 # 双向 RNN 比较麻烦
                 encoder_cell_bw = self.build_encoder_cell()
@@ -443,7 +441,7 @@ class SequenceToSequence(object):
                     encoder_state.append(encoder_bw_state[i])
                 encoder_state = tuple(encoder_state)
 
-                return encoder_outputs, encoder_state
+            return encoder_outputs, encoder_state
 
 
     def build_decoder_cell(self, encoder_outputs, encoder_state):
@@ -499,7 +497,7 @@ class SequenceToSequence(object):
 
         # 在非训练（预测）模式，并且没开启 beamsearch 的时候，打开 attention 历史信息
         alignment_history = (
-            not self.mode == 'train' and not self.use_beamsearch_decode
+            self.mode != 'train' and not self.use_beamsearch_decode
         )
 
         def cell_input_fn(inputs, attention):
@@ -1091,7 +1089,7 @@ class SequenceToSequence(object):
 
             pred, atten = sess.run([
                 self.decoder_pred_decode,
-                self.final_state[1].alignment_history.stack()
+                self.final_state.alignment_history.stack()
             ], input_feed)
 
             return pred, atten

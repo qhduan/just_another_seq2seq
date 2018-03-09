@@ -127,6 +127,10 @@ Input English Sentence:i'm really a bad boy
 
 [Chatbot实例](/chatbot/)
 
+
+`test_atten.py` 脚本，测试并展示 attention 的热力图
+
+
 # TensorFlow alert
 
 Test in
