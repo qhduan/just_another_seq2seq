@@ -8,6 +8,7 @@ import pickle
 
 import numpy as np
 import tensorflow as tf
+import jieba
 
 sys.path.append('..')
 
@@ -54,7 +55,8 @@ def test(bidirectional, cell_type, depth,
             parallel_iterations=1,
             time_major=time_major,
             hidden_units=hidden_units,
-            share_embedding=True
+            share_embedding=True,
+            pretrained_embedding=True
         )
         init = tf.global_variables_initializer()
         sess_rl = tf.Session(config=config)
@@ -78,7 +80,8 @@ def test(bidirectional, cell_type, depth,
             parallel_iterations=1,
             time_major=time_major,
             hidden_units=hidden_units,
-            share_embedding=True
+            share_embedding=True,
+            pretrained_embedding=True
         )
         init = tf.global_variables_initializer()
         sess = tf.Session(config=config)
@@ -89,8 +92,7 @@ def test(bidirectional, cell_type, depth,
         user_text = input('Input Chat Sentence:')
         if user_text in ('exit', 'quit'):
             exit(0)
-        x_test = list(user_text.lower())
-        x_test = [x_test]
+        x_test = [jieba.lcut(user_text.lower())]
         bar = batch_flow([x_test], [ws], 1)
         x, xl = next(bar)
         x = np.flip(x, axis=1)

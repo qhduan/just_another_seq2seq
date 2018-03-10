@@ -29,8 +29,8 @@ def test(bidirectional, cell_type, depth,
         open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
-    batch_size = 64
+    n_epoch = 20
+    batch_size = 128
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
     # x_data = x_data[:10000]
     # y_data = y_data[:10000]
