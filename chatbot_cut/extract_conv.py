@@ -121,18 +121,20 @@ def main(limit=20, x_limit=3, y_limit=6):
     print('refine train data')
 
     train_data = x_data + y_data
-    good_train_data = []
-    for line in tqdm(train_data):
-        good_train_data.append([
-            x for x in line
-            if x in word_vec
-        ])
+
+    # good_train_data = []
+    # for line in tqdm(train_data):
+    #     good_train_data.append([
+    #         x for x in line
+    #         if x in word_vec
+    #     ])
+    # train_data = good_train_data
 
     print('fit word_sequence')
 
     ws_input = WordSequence()
 
-    ws_input.fit(good_train_data)
+    ws_input.fit(train_data, max_features=100000)
 
     print('dump word_sequence')
 
@@ -145,8 +147,12 @@ def main(limit=20, x_limit=3, y_limit=6):
 
     emb = np.zeros((len(ws_input), len(word_vec['</s>'])))
 
+    np.random.seed(1)
     for word, ind in ws_input.dict.items():
-        emb[ind] = word_vec[word]
+        if word in word_vec:
+            emb[ind] = word_vec[word]
+        else:
+            emb[ind] = np.random.random(size=(300,)) - 0.5
 
     print('dump emb')
 

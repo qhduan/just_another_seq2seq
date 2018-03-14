@@ -113,18 +113,12 @@ class WordSequence(object):
 
 
     def transform(self,
-                  sentence, add_end=True, add_start=False, max_len=None):
+                  sentence, max_len=None):
         """把句子转换为向量
         例如输入 ['a', 'b', 'c']
         输出 [1, 2, 3] 这个数字是字典里的编号，顺序没有意义
         """
         assert self.fited, 'WordSequence 尚未 fit'
-
-        if add_start:
-            sentence = [self.START_TAG] + list(sentence)
-
-        if add_end:
-            sentence = list(sentence) + [self.END_TAG]
 
         # if max_len is not None:
         #     r = [self.PAD] * max_len

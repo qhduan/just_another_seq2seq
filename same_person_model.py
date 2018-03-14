@@ -1,5 +1,8 @@
 """
-一个用于gan训练的discriminator
+一个用于句子训练的model
+
+输入两个句子
+判断一个target
 """
 
 import math
@@ -17,7 +20,7 @@ from tensorflow.contrib.rnn import ResidualWrapper
 from data_utils import _get_embed_device
 
 
-class Discriminative(object):
+class SamePerson(object):
 
     """
     一个用于gan训练的discriminator
@@ -25,7 +28,7 @@ class Discriminative(object):
     """
 
     def __init__(self,
-                 input_vocab_size, batch_size,
+                 input_vocab_size, n_target, batch_size,
                  mode='train', depth=1, embedding_size=128,
                  hidden_units=256, cell_type='lstm',
                  bidirectional=False,
@@ -38,6 +41,7 @@ class Discriminative(object):
                  seed=0):
 
         self.input_vocab_size = input_vocab_size
+        self.n_target = n_target
         self.batch_size = batch_size
         self.mode = mode
         self.depth = depth
@@ -94,34 +98,34 @@ class Discriminative(object):
 
         # 编码器输入，shape=(batch_size, time_step)
         # 有 batch_size 句话，每句话是最大长度为 time_step 的 index 表示
-        self.encoder_inputs = tf.placeholder(
+        self.first_inputs = tf.placeholder(
             dtype=tf.int32,
             shape=(self.batch_size, None),
-            name='encoder_inputs'
+            name='first_inputs'
         )
 
         # 编码器长度输入，shape=(batch_size, 1)
         # 指的是 batch_size 句话每句话的长度
-        self.encoder_inputs_length = tf.placeholder(
+        self.first_inputs_length = tf.placeholder(
             dtype=tf.int32,
             shape=(self.batch_size,),
-            name='encoder_inputs_length'
+            name='first_inputs_length'
         )
 
         # 编码器输入，shape=(batch_size, time_step)
         # 有 batch_size 句话，每句话是最大长度为 time_step 的 index 表示
-        self.x = tf.placeholder(
+        self.second_inputs = tf.placeholder(
             dtype=tf.int32,
             shape=(self.batch_size, None),
-            name='x'
+            name='second_inputs'
         )
 
         # 编码器长度输入，shape=(batch_size, 1)
         # 指的是 batch_size 句话每句话的长度
-        self.xl = tf.placeholder(
+        self.second_inputs_length = tf.placeholder(
             dtype=tf.int32,
             shape=(self.batch_size,),
-            name='xl'
+            name='second_inputs_length'
         )
 
         # 编码器的embedding
@@ -175,13 +179,13 @@ class Discriminative(object):
             for _ in range(self.depth)
         ])
 
-    def build_rnn(self, x, xl):
+    def build_rnn(self, x, xl, encoder_cell, encoder_cell_bw=None):
         """根据输入x和输入长度xl
         构建一个RNN的outputs
         """
 
         # 构建 encoder_cell
-        encoder_cell = self.build_encoder_cell()
+        # encoder_cell = self.build_encoder_cell()
 
         # embedded之后的输入 shape = (batch_size, time_step, embedding_size)
         encoder_inputs_embedded = tf.nn.embedding_lookup(
@@ -220,7 +224,7 @@ class Discriminative(object):
                 swap_memory=True
             )
         else:
-            encoder_cell_bw = self.build_encoder_cell()
+            # encoder_cell_bw = self.build_encoder_cell()
             (
                 (encoder_fw_outputs, encoder_bw_outputs),
                 (_, _)
@@ -257,12 +261,20 @@ class Discriminative(object):
         # print("构建编码器")
         with tf.variable_scope('encoder'):
 
+            encoder_cell = self.build_encoder_cell()
+            encoder_cell_bw = None
+            if self.bidirectional:
+                encoder_cell_bw = self.build_encoder_cell()
+
             with tf.variable_scope('output_x'):
-                output_x = self.build_rnn(self.x, self.xl)
+                output_x = self.build_rnn(
+                    self.first_inputs, self.first_inputs_length,
+                    encoder_cell, encoder_cell_bw)
 
             with tf.variable_scope('output_en'):
-                output_en = self.build_rnn(self.encoder_inputs,
-                                           self.encoder_inputs_length)
+                output_en = self.build_rnn(
+                    self.second_inputs, self.second_inputs_length,
+                    encoder_cell, encoder_cell_bw)
 
             hidden_units = self.hidden_units
             if self.bidirectional:
@@ -270,10 +282,15 @@ class Discriminative(object):
 
             l = tf.concat((output_x, output_en), 1)
 
-            l = tf.tanh(tf.layers.dense(l, units=hidden_units))
+            l = tf.layers.dense(l, units=hidden_units)
+            l = tf.layers.batch_normalization(l)
+            l = tf.tanh(l)
 
-            self.logits = tf.layers.dense(l, units=2)
-            self.logits = tf.contrib.layers.batch_norm(self.logits)
+            l = tf.layers.dense(l, units=hidden_units)
+            l = tf.layers.batch_normalization(l)
+            l = tf.tanh(l)
+
+            self.logits = tf.layers.dense(l, units=self.n_target)
 
             self.outputs = tf.nn.softmax(self.logits)
 
@@ -323,19 +340,23 @@ class Discriminative(object):
             gradients, self.max_gradient_norm)
 
         # Update the model
-        self.updates = self.opt.apply_gradients(
-            zip(clip_gradients, trainable_params),
-            global_step=self.global_step)
+        update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
+        with tf.control_dependencies(update_ops):
+            self.updates = self.opt.apply_gradients(
+                zip(clip_gradients, trainable_params),
+                global_step=self.global_step)
+            # train_op = optimizer.minimize(loss)
+
 
 
 
     def predict(self, sess, x, xl, encoder_inputs, encoder_inputs_length):
         """预测结果"""
         input_feed = {
-            self.x.name: x,
-            self.xl.name: xl,
-            self.encoder_inputs.name: encoder_inputs,
-            self.encoder_inputs_length.name: encoder_inputs_length,
+            self.first_inputs.name: x,
+            self.first_inputs_length.name: xl,
+            self.second_inputs.name: encoder_inputs,
+            self.second_inputs_length.name: encoder_inputs_length,
             self.keep_prob_placeholder.name: 1.0
         }
 
@@ -344,15 +365,15 @@ class Discriminative(object):
         return sess.run(output_feed, input_feed)
 
 
-    def train(self, sess, x, xl,
-              encoder_inputs, encoder_inputs_length, targets):
+    def train(self, sess, first_inputs, first_inputs_length,
+              second_inputs, second_inputs_length, targets):
         """训练"""
         input_feed = {
-            self.x.name: x,
-            self.xl.name: xl,
-            self.encoder_inputs.name: encoder_inputs,
-            self.encoder_inputs_length.name: encoder_inputs_length,
-            self.targets: targets,
+            self.first_inputs.name: first_inputs,
+            self.first_inputs_length.name: first_inputs_length,
+            self.second_inputs.name: second_inputs,
+            self.second_inputs_length.name: second_inputs_length,
+            self.targets.name: targets,
             self.keep_prob_placeholder.name: self.keep_prob
         }
 
@@ -397,7 +418,7 @@ def test():
 
         with tf.Session(config=config) as sess:
 
-            model = Discriminative(len(ws_input), batch_size=batch_size)
+            model = SamePerson(len(ws_input), batch_size=batch_size)
             init = tf.global_variables_initializer()
             sess.run(init)
 
@@ -413,13 +434,18 @@ def test():
                 for _ in bar:
                     x, xl, y, yl = next(flow)
                     targets = np.array([
-                        (0, 1)
+                        1
                         for x in range(len(y))
                     ])
-                    cost = model.train(sess, x, xl, y, yl, targets)
-                    print(x.shape, xl.shape)
-                    print('cost.shape, cost', cost.shape, cost)
-                    exit(1)
+                    cost = model.train(sess, x, xl, x, xl, targets)
+                    targets = np.array([
+                        0
+                        for x in range(len(y))
+                    ])
+                    cost += model.train(sess, x, xl, y, yl, targets)
+                    # print(x.shape, xl.shape)
+                    # print('cost.shape, cost', cost.shape, cost)
+                    # exit(1)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f}'.format(
                         epoch,

@@ -28,7 +28,7 @@ def test(bidirectional, cell_type, depth,
 
     # 训练部分
     n_epoch = 10
-    batch_size = 64
+    batch_size = 4
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
     # x_data = x_data[:10000]
     # y_data = y_data[:10000]
@@ -74,7 +74,8 @@ def test(bidirectional, cell_type, depth,
             # exit(1)
 
             flow = ThreadedGenerator(
-                batch_flow([x_data, y_data], ws, batch_size),
+                batch_flow([x_data, y_data], ws, batch_size,
+                           add_end=[False, True]),
                 queue_maxsize=30)
 
             for epoch in range(1, n_epoch + 1):
@@ -85,6 +86,8 @@ def test(bidirectional, cell_type, depth,
                     x, xl, y, yl = next(flow)
                     x = np.flip(x, axis=1)
                     # print(x, y)
+                    # print(xl, yl)
+                    # exit(1)
                     cost, lr = model.train(sess, x, xl, y, yl, return_lr=True)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f} lr={:.6f}'.format(
@@ -124,7 +127,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow([x_data, y_data], ws, 1)
+        bar = batch_flow([x_data, y_data], ws, 1, add_end=False)
         t = 0
         for x, xl, y, yl in bar:
             x = np.flip(x, axis=1)
@@ -166,7 +169,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow([x_data, y_data], ws, 1)
+        bar = batch_flow([x_data, y_data], ws, 1, add_end=False)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(

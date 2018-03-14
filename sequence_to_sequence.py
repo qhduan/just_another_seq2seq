@@ -367,7 +367,7 @@ class SequenceToSequence(object):
                             0.0,
                             shape=(self.input_vocab_size, self.embedding_size)
                         ),
-                        trainable=False,
+                        trainable=True,
                         name='embeddings'
                     )
                     self.encoder_embeddings_placeholder = tf.placeholder(
@@ -557,7 +557,7 @@ class SequenceToSequence(object):
                             shape=(self.target_vocab_size,
                                    self.embedding_size)
                         ),
-                        trainable=False,
+                        trainable=True,
                         name='embeddings'
                     )
                     self.decoder_embeddings_placeholder = tf.placeholder(

@@ -22,6 +22,7 @@ def test(bidirectional, cell_type, depth,
     from data_utils import batch_flow_bucket as batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
     from threadedgenerator import ThreadedGenerator
+    from same_person_model import SamePerson
 
     x_data, y_data, ws = pickle.load(
         open('chatbot.pkl', 'rb'))
@@ -30,8 +31,8 @@ def test(bidirectional, cell_type, depth,
     n_epoch = 10
     batch_size = 64
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
-    # x_data = x_data[:100000]
-    # y_data = y_data[:100000]
+    # x_data = x_data[:10000]
+    # y_data = y_data[:10000]
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -40,7 +41,31 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = './s2ss_chatbot_anti.ckpt'
+
+    with tf.Graph().as_default():
+        # test(True, 'lstm', 2, 'Bahdanau', True, True, True, 256)
+        model_sp = SamePerson(
+            input_vocab_size=len(ws),
+            n_target=2,
+            batch_size=batch_size,
+            learning_rate=0.001,
+            bidirectional=True,
+            cell_type='lstm',
+            depth=2,
+            use_residual=True,
+            use_dropout=True,
+            parallel_iterations=1,
+            time_major=True,
+            hidden_units=256,
+            optimizer='adam'
+        )
+        init = tf.global_variables_initializer()
+        sess_sp = tf.Session(config=config)
+        sess_sp.run(init)
+        model_sp.load(sess_sp, './s2ss_chatbot_samperson.ckpt')
+
+
+    save_path = './s2ss_chatbot_sp.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -74,13 +99,9 @@ def test(bidirectional, cell_type, depth,
             # exit(1)
 
             flow = ThreadedGenerator(
-                batch_flow([x_data, y_data], ws, batch_size,
+                batch_flow([x_data, y_data], ws, batch_size
                            add_end=[False, True]),
                 queue_maxsize=30)
-
-            dummy_encoder_inputs = np.array([
-                np.array([WordSequence.PAD]) for _ in range(batch_size)])
-            dummy_encoder_inputs_lengths = np.array([1] * batch_size)
 
             for epoch in range(1, n_epoch + 1):
                 costs = []
@@ -88,17 +109,14 @@ def test(bidirectional, cell_type, depth,
                            desc='epoch {}, loss=0.000000'.format(epoch))
                 for _ in bar:
                     x, xl, y, yl = next(flow)
+
+                    rewards = model_sp.predict(sess_sp, x, xl, y, yl)
+                    rewards = rewards[:, 1:]
+
                     x = np.flip(x, axis=1)
-
-                    add_loss = model.train(sess,
-                                           dummy_encoder_inputs,
-                                           dummy_encoder_inputs_lengths,
-                                           y, yl, loss_only=True)
-
-                    add_loss *= -0.5
                     # print(x, y)
                     cost, lr = model.train(sess, x, xl, y, yl,
-                                           return_lr=True, add_loss=add_loss)
+                                           return_lr=True, rewards=rewards)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f} lr={:.6f}'.format(
                         epoch,
@@ -109,6 +127,8 @@ def test(bidirectional, cell_type, depth,
                 model.save(sess, save_path)
 
             flow.close()
+
+
 
     # 测试部分
     tf.reset_default_graph()
