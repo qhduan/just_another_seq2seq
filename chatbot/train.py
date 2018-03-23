@@ -14,8 +14,7 @@ from tqdm import tqdm
 sys.path.append('..')
 
 
-def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major, hidden_units):
+def test(params):
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
@@ -23,12 +22,12 @@ def test(bidirectional, cell_type, depth,
     from word_sequence import WordSequence # pylint: disable=unused-variable
     from threadedgenerator import ThreadedGenerator
 
-    x_data, y_data, ws = pickle.load(
-        open('chatbot.pkl', 'rb'))
+    x_data, y_data = pickle.load(open('chatbot.pkl', 'rb'))
+    ws = pickle.load(open('ws.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 10
-    batch_size = 4
+    n_epoch = 20
+    batch_size = 32
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
     # x_data = x_data[:10000]
     # y_data = y_data[:10000]
@@ -54,18 +53,7 @@ def test(bidirectional, cell_type, depth,
                 input_vocab_size=len(ws),
                 target_vocab_size=len(ws),
                 batch_size=batch_size,
-                bidirectional=bidirectional,
-                cell_type=cell_type,
-                depth=depth,
-                attention_type=attention_type,
-                use_residual=use_residual,
-                use_dropout=use_dropout,
-                hidden_units=hidden_units,
-                time_major=time_major,
-                learning_rate=0.001,
-                optimizer='adam',
-                share_embedding=True,
-                dropout=0.2
+                **params
             )
             init = tf.global_variables_initializer()
             sess.run(init)
@@ -108,18 +96,8 @@ def test(bidirectional, cell_type, depth,
         batch_size=1,
         mode='decode',
         beam_width=12,
-        bidirectional=bidirectional,
-        cell_type=cell_type,
-        depth=depth,
-        attention_type=attention_type,
-        use_residual=use_residual,
-        use_dropout=use_dropout,
-        hidden_units=hidden_units,
-        time_major=time_major,
         parallel_iterations=1,
-        learning_rate=0.001,
-        optimizer='adam',
-        share_embedding=True
+        **params
     )
     init = tf.global_variables_initializer()
 
@@ -150,18 +128,8 @@ def test(bidirectional, cell_type, depth,
         batch_size=1,
         mode='decode',
         beam_width=1,
-        bidirectional=bidirectional,
-        cell_type=cell_type,
-        depth=depth,
-        attention_type=attention_type,
-        use_residual=use_residual,
-        use_dropout=use_dropout,
-        hidden_units=hidden_units,
-        time_major=time_major,
         parallel_iterations=1,
-        learning_rate=0.001,
-        optimizer='adam',
-        share_embedding=True
+        **params
     )
     init = tf.global_variables_initializer()
 
@@ -186,20 +154,9 @@ def test(bidirectional, cell_type, depth,
 
 
 def main():
-    """入口程序，开始测试不同参数组合"""
-    random.seed(0)
-    np.random.seed(0)
-    tf.set_random_seed(0)
-    test(
-        bidirectional=True,
-        cell_type='lstm',
-        depth=2,
-        attention_type='Bahdanau',
-        use_residual=False,
-        use_dropout=False,
-        time_major=False,
-        hidden_units=512
-    )
+    """入口程序"""
+    import json
+    test(json.load(open('params.json')))
 
 
 if __name__ == '__main__':

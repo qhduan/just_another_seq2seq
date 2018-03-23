@@ -1,0 +1,13 @@
+{
+    "bidirectional": true,
+    "use_residual": false,
+    "use_dropout": false,
+    "time_major": false,
+    "cell_type": "lstm",
+    "depth": 2,
+    "attention_type": "Bahdanau",
+    "hidden_units": 1024,
+    "optimizer": "adam",
+    "learning_rate": 0.001,
+    "embedding_size": 300
+}

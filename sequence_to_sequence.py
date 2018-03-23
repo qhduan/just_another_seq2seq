@@ -392,6 +392,13 @@ class SequenceToSequence(object):
                 ids=self.encoder_inputs
             )
 
+            if self.use_residual:
+                self.encoder_inputs_embedded = \
+                    layers.dense(self.encoder_inputs_embedded,
+                                 self.hidden_units,
+                                 use_bias=False,
+                                 name='encoder_residual_projection')
+
             # Encode input sequences into context vectors:
             # encoder_outputs: [batch_size, max_time_step, cell_output_size]
             # encoder_state: [batch_size, cell_output_size]

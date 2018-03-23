@@ -86,13 +86,13 @@ def main(limit=20, x_limit=3, y_limit=6):
             if next_line:
                 x_data.append(line)
                 y_data.append(next_line)
-            # if last_line and next_line:
-            #     x_data.append(last_line + make_split(last_line) + line)
-            #     y_data.append(next_line)
-            # if next_line and next_next_line:
-            #     x_data.append(line)
-            #     y_data.append(next_line + make_split(next_line) \
-            #         + next_next_line)
+            if last_line and next_line:
+                x_data.append(last_line + make_split(last_line) + line)
+                y_data.append(next_line)
+            if next_line and next_next_line:
+                x_data.append(line)
+                y_data.append(next_line + make_split(next_line) \
+                    + next_next_line)
 
     print(len(x_data), len(y_data))
     for ask, answer in zip(x_data[:20], y_data[:20]):
@@ -119,9 +119,10 @@ def main(limit=20, x_limit=3, y_limit=6):
     print('dump')
 
     pickle.dump(
-        (x_data, y_data, ws_input),
+        (x_data, y_data),
         open('chatbot.pkl', 'wb')
     )
+    pickle.dump(ws_input, open('ws.pkl', 'wb'))
 
     print('done')
 

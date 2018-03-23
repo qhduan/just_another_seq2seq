@@ -12,15 +12,14 @@ import tensorflow as tf
 sys.path.append('..')
 
 
-def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major, hidden_units):
+def test(params):
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
     from data_utils import batch_flow
     from word_sequence import WordSequence # pylint: disable=unused-variable
 
-    _, _, ws = pickle.load(open('chatbot.pkl', 'rb'))
+    ws = pickle.load(open('ws.pkl', 'rb'))
 
     # for x in x_data[:5]:
     #     print(' '.join(x))
@@ -45,16 +44,7 @@ def test(bidirectional, cell_type, depth,
             batch_size=1,
             mode='decode',
             beam_width=12,
-            bidirectional=bidirectional,
-            cell_type=cell_type,
-            depth=depth,
-            attention_type=attention_type,
-            use_residual=use_residual,
-            use_dropout=use_dropout,
-            parallel_iterations=1,
-            time_major=time_major,
-            hidden_units=hidden_units,
-            share_embedding=True
+            **params
         )
         init = tf.global_variables_initializer()
         sess_rl = tf.Session(config=config)
@@ -69,16 +59,7 @@ def test(bidirectional, cell_type, depth,
             batch_size=1,
             mode='decode',
             beam_width=12,
-            bidirectional=bidirectional,
-            cell_type=cell_type,
-            depth=depth,
-            attention_type=attention_type,
-            use_residual=use_residual,
-            use_dropout=use_dropout,
-            parallel_iterations=1,
-            time_major=time_major,
-            hidden_units=hidden_units,
-            share_embedding=True
+            **params
         )
         init = tf.global_variables_initializer()
         sess = tf.Session(config=config)
@@ -118,20 +99,9 @@ def test(bidirectional, cell_type, depth,
 
 
 def main():
-    """入口程序，开始测试不同参数组合"""
-    random.seed(0)
-    np.random.seed(0)
-    tf.set_random_seed(0)
-    test(
-        bidirectional=True,
-        cell_type='lstm',
-        depth=2,
-        attention_type='Bahdanau',
-        use_residual=False,
-        use_dropout=False,
-        time_major=False,
-        hidden_units=512
-    )
+    """入口程序"""
+    import json
+    test(json.load(open('params.json')))
 
 
 if __name__ == '__main__':
