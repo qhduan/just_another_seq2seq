@@ -5,6 +5,7 @@
 import random
 import numpy as np
 from tensorflow.python.client import device_lib
+from word_sequence import WordSequence
 
 VOCAB_SIZE_THRESHOLD_CPU = 50000
 
@@ -25,7 +26,7 @@ def _get_embed_device(vocab_size):
     return "/gpu:0"
 
 
-def transform_sentence(sentence, ws, max_len=None):
+def transform_sentence(sentence, ws, max_len=None, add_end=False):
     """转换一个单独句子
     Args:
         sentence: 一句话，例如一个数组['你', '好', '吗']
@@ -41,13 +42,13 @@ def transform_sentence(sentence, ws, max_len=None):
     encoded = ws.transform(
         sentence,
         max_len=max_len if max_len is not None else len(sentence))
-    encoded_len = len(sentence) + 1 # add end
+    encoded_len = len(sentence) + (1 if add_end else 0) # add end
     if encoded_len > len(encoded):
         encoded_len = len(encoded)
     return encoded, encoded_len
 
 
-def batch_flow(data, ws, batch_size, raw=False):
+def batch_flow(data, ws, batch_size, raw=False, add_end=True):
     """从数据中随机 batch_size 个的数据，然后 yield 出去
     Args:
         data:
@@ -81,6 +82,14 @@ def batch_flow(data, ws, batch_size, raw=False):
         assert len(ws) == len(data), \
             'len(ws) must equal to len(data) if ws is list or tuple'
 
+    if isinstance(add_end, bool):
+        add_end = [add_end] * len(data)
+    else:
+        assert(isinstance(add_end, (list, tuple))), \
+            'add_end 不是 boolean，就应该是一个list(tuple) of boolean'
+        assert len(add_end) == len(data), \
+            '如果 add_end 是list(tuple)，那么 add_end 的长度应该和输入数据长度一致'
+
     mul = 2
     if raw:
         mul = 3
@@ -91,7 +100,10 @@ def batch_flow(data, ws, batch_size, raw=False):
 
         max_lens = []
         for j in range(len(data)):
-            max_len = max([len(x[j]) for x in data_batch]) + 1
+            max_len = max([
+                len(x[j]) if hasattr(x[j], '__len__') else 0
+                for x in data_batch
+            ]) + (1 if add_end[j] else 0)
             max_lens.append(max_len)
 
         for d in data_batch:
@@ -100,11 +112,21 @@ def batch_flow(data, ws, batch_size, raw=False):
                     w = ws[j]
                 else:
                     w = ws
-                x, xl = transform_sentence(d[j], w, max_lens[j])
-                batches[j * mul].append(x)
-                batches[j * mul + 1].append(xl)
+
+                # 添加结尾
+                line = d[j]
+                if add_end[j] and isinstance(line, (tuple, list)):
+                    line = list(line) + [WordSequence.END_TAG]
+
+                if w is not None:
+                    x, xl = transform_sentence(line, w, max_lens[j], add_end[j])
+                    batches[j * mul].append(x)
+                    batches[j * mul + 1].append(xl)
+                else:
+                    batches[j * mul].append(line)
+                    batches[j * mul + 1].append(line)
                 if raw:
-                    batches[j * mul + 2].append(d[j])
+                    batches[j * mul + 2].append(line)
         batches = [np.asarray(x) for x in batches]
 
         yield batches
@@ -112,7 +134,9 @@ def batch_flow(data, ws, batch_size, raw=False):
 
 
 def batch_flow_bucket(data, ws, batch_size, raw=False,
-                      n_buckets=5, bucket_ind=1, debug=False):
+                      add_end=True,
+                      n_buckets=5, bucket_ind=1,
+                      debug=False):
     """batch_flow的bucket版本
     多了两重要参数，一个是n_buckets，一个是bucket_ind
     n_buckets是分成几个buckets，理论上n_buckets == 1时就相当于没有进行buckets操作
@@ -152,6 +176,16 @@ def batch_flow_bucket(data, ws, batch_size, raw=False,
         assert len(ws) == len(data), \
             'len(ws) must equal to len(data) if ws is list or tuple'
 
+
+
+    if isinstance(add_end, bool):
+        add_end = [add_end] * len(data)
+    else:
+        assert(isinstance(add_end, (list, tuple))), \
+            'add_end 不是 boolean，就应该是一个list(tuple) of boolean'
+        assert len(add_end) == len(data), \
+            '如果 add_end 是list(tuple)，那么 add_end 的长度应该和输入数据长度一致'
+
     mul = 2
     if raw:
         mul = 3
@@ -165,7 +199,10 @@ def batch_flow_bucket(data, ws, batch_size, raw=False,
 
         max_lens = []
         for j in range(len(data)):
-            max_len = max([len(x[j]) for x in data_batch]) + 1
+            max_len = max([
+                len(x[j]) if hasattr(x[j], '__len__') else 0
+                for x in data_batch
+            ]) + (1 if add_end[j] else 0)
             max_lens.append(max_len)
 
         for d in data_batch:
@@ -174,11 +211,21 @@ def batch_flow_bucket(data, ws, batch_size, raw=False,
                     w = ws[j]
                 else:
                     w = ws
-                x, xl = transform_sentence(d[j], w, max_lens[j])
-                batches[j * mul].append(x)
-                batches[j * mul + 1].append(xl)
+
+                # 添加结尾
+                line = d[j]
+                if add_end[j] and isinstance(line, (tuple, list)):
+                    line = list(line) + [WordSequence.END_TAG]
+
+                if w is not None:
+                    x, xl = transform_sentence(line, w, max_lens[j], add_end[j])
+                    batches[j * mul].append(x)
+                    batches[j * mul + 1].append(xl)
+                else:
+                    batches[j * mul].append(line)
+                    batches[j * mul + 1].append(line)
                 if raw:
-                    batches[j * mul + 2].append(d[j])
+                    batches[j * mul + 2].append(line)
         batches = [np.asarray(x) for x in batches]
 
         yield batches

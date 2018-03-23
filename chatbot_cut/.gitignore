@@ -1,0 +1,7 @@
+
+*.zip
+*.pkl
+*.conv
+*.ckpt*
+checkpoint
+*.vec

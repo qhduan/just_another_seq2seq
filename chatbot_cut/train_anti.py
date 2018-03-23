@@ -14,7 +14,8 @@ from tqdm import tqdm
 sys.path.append('..')
 
 
-def test(params):
+def test(bidirectional, cell_type, depth,
+         attention_type, use_residual, use_dropout, time_major, hidden_units):
     """测试不同参数在生成的假数据上的运行结果"""
 
     from sequence_to_sequence import SequenceToSequence
@@ -22,15 +23,17 @@ def test(params):
     from word_sequence import WordSequence # pylint: disable=unused-variable
     from threadedgenerator import ThreadedGenerator
 
-    x_data, y_data = pickle.load(open('chatbot.pkl', 'rb'))
-    ws = pickle.load(open('ws.pkl', 'rb'))
+    emb = pickle.load(open('emb.pkl', 'rb'))
+
+    x_data, y_data, ws = pickle.load(
+        open('chatbot.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 5
-    batch_size = 32
+    n_epoch = 20
+    batch_size = 128
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
-    # x_data = x_data[:10000]
-    # y_data = y_data[:10000]
+    # x_data = x_data[:100000]
+    # y_data = y_data[:100000]
     steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
@@ -39,7 +42,7 @@ def test(params):
         log_device_placement=False
     )
 
-    save_path = './s2ss_chatbot.ckpt'
+    save_path = './s2ss_chatbot_anti.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -53,18 +56,36 @@ def test(params):
                 input_vocab_size=len(ws),
                 target_vocab_size=len(ws),
                 batch_size=batch_size,
-                **params
+                bidirectional=bidirectional,
+                cell_type=cell_type,
+                depth=depth,
+                attention_type=attention_type,
+                use_residual=use_residual,
+                use_dropout=use_dropout,
+                hidden_units=hidden_units,
+                time_major=time_major,
+                learning_rate=0.001,
+                optimizer='adam',
+                share_embedding=True,
+                dropout=0.2,
+                pretrained_embedding=True
             )
             init = tf.global_variables_initializer()
             sess.run(init)
+
+            # 加载训练好的embedding
+            model.feed_embedding(sess, encoder=emb)
 
             # print(sess.run(model.input_layer.kernel))
             # exit(1)
 
             flow = ThreadedGenerator(
-                batch_flow([x_data, y_data], ws, batch_size,
-                           add_end=[False, True]),
+                batch_flow([x_data, y_data], ws, batch_size),
                 queue_maxsize=30)
+
+            dummy_encoder_inputs = np.array([
+                np.array([WordSequence.PAD]) for _ in range(batch_size)])
+            dummy_encoder_inputs_lengths = np.array([1] * batch_size)
 
             for epoch in range(1, n_epoch + 1):
                 costs = []
@@ -73,10 +94,16 @@ def test(params):
                 for _ in bar:
                     x, xl, y, yl = next(flow)
                     x = np.flip(x, axis=1)
+
+                    add_loss = model.train(sess,
+                                           dummy_encoder_inputs,
+                                           dummy_encoder_inputs_lengths,
+                                           y, yl, loss_only=True)
+
+                    add_loss *= -0.5
                     # print(x, y)
-                    # print(xl, yl)
-                    # exit(1)
-                    cost, lr = model.train(sess, x, xl, y, yl, return_lr=True)
+                    cost, lr = model.train(sess, x, xl, y, yl,
+                                           return_lr=True, add_loss=add_loss)
                     costs.append(cost)
                     bar.set_description('epoch {} loss={:.6f} lr={:.6f}'.format(
                         epoch,
@@ -96,8 +123,19 @@ def test(params):
         batch_size=1,
         mode='decode',
         beam_width=12,
+        bidirectional=bidirectional,
+        cell_type=cell_type,
+        depth=depth,
+        attention_type=attention_type,
+        use_residual=use_residual,
+        use_dropout=use_dropout,
+        hidden_units=hidden_units,
+        time_major=time_major,
         parallel_iterations=1,
-        **params
+        learning_rate=0.001,
+        optimizer='adam',
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -105,7 +143,7 @@ def test(params):
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow([x_data, y_data], ws, 1, add_end=False)
+        bar = batch_flow([x_data, y_data], ws, 1)
         t = 0
         for x, xl, y, yl in bar:
             x = np.flip(x, axis=1)
@@ -128,8 +166,19 @@ def test(params):
         batch_size=1,
         mode='decode',
         beam_width=1,
+        bidirectional=bidirectional,
+        cell_type=cell_type,
+        depth=depth,
+        attention_type=attention_type,
+        use_residual=use_residual,
+        use_dropout=use_dropout,
+        hidden_units=hidden_units,
+        time_major=time_major,
         parallel_iterations=1,
-        **params
+        learning_rate=0.001,
+        optimizer='adam',
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -137,7 +186,7 @@ def test(params):
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow([x_data, y_data], ws, 1, add_end=False)
+        bar = batch_flow([x_data, y_data], ws, 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -154,9 +203,20 @@ def test(params):
 
 
 def main():
-    """入口程序"""
-    import json
-    test(json.load(open('params.json')))
+    """入口程序，开始测试不同参数组合"""
+    random.seed(0)
+    np.random.seed(0)
+    tf.set_random_seed(0)
+    test(
+        bidirectional=True,
+        cell_type='lstm',
+        depth=2,
+        attention_type='Bahdanau',
+        use_residual=False,
+        use_dropout=False,
+        time_major=False,
+        hidden_units=512
+    )
 
 
 if __name__ == '__main__':

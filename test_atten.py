@@ -22,7 +22,7 @@ def test(bidirectional, cell_type, depth, attention_type):
 
     # 训练部分
 
-    split = 9900
+    split = int(len(x_data) * 0.9)
     x_train, x_test, y_train, y_test = (
         x_data[:split], x_data[split:], y_data[:split], y_data[split:])
     n_epoch = 2
@@ -86,7 +86,6 @@ def test(bidirectional, cell_type, depth, attention_type):
             cell_type=cell_type,
             depth=depth,
             attention_type=attention_type,
-            alignment_history=True,
             parallel_iterations=1
         )
         init = tf.global_variables_initializer()

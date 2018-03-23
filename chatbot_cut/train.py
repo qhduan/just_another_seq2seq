@@ -2,43 +2,47 @@
 对SequenceToSequence模型进行基本的参数组合测试
 """
 
+import sys
 import random
-import itertools
-from collections import OrderedDict
+import pickle
 
-import pandas as pd
 import numpy as np
 import tensorflow as tf
 from tqdm import tqdm
+# from sklearn.utils import shuffle
 
-from sequence_to_sequence import SequenceToSequence
-from data_utils import batch_flow
-from fake_data import generate
+sys.path.append('..')
 
 
 def test(bidirectional, cell_type, depth,
-         attention_type, use_residual, use_dropout, time_major):
+         attention_type, use_residual, use_dropout, time_major, hidden_units):
     """测试不同参数在生成的假数据上的运行结果"""
 
-    # 获取一些假数据
-    x_data, y_data, ws_input, ws_target = generate(size=1000)
+    from sequence_to_sequence import SequenceToSequence
+    from data_utils import batch_flow_bucket as batch_flow
+    from word_sequence import WordSequence # pylint: disable=unused-variable
+    from threadedgenerator import ThreadedGenerator
+
+    emb = pickle.load(open('emb.pkl', 'rb'))
+
+    x_data, y_data, ws = pickle.load(
+        open('chatbot.pkl', 'rb'))
 
     # 训练部分
-
-    split = int(len(x_data) * 0.8)
-    x_train, x_test, y_train, y_test = (
-        x_data[:split], x_data[split:], y_data[:split], y_data[split:])
-    n_epoch = 1
-    batch_size = 8
-    steps = int(len(x_train) / batch_size) + 1
+    n_epoch = 20
+    batch_size = 128
+    # x_data, y_data = shuffle(x_data, y_data, random_state=0)
+    # x_data = x_data[:10000]
+    # y_data = y_data[:10000]
+    steps = int(len(x_data) / batch_size) + 1
 
     config = tf.ConfigProto(
-        device_count={'CPU': 1, 'GPU': 0},
+        # device_count={'CPU': 1, 'GPU': 0},
         allow_soft_placement=True,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss.ckpt'
+    save_path = './s2ss_chatbot.ckpt'
 
     tf.reset_default_graph()
     with tf.Graph().as_default():
@@ -49,63 +53,77 @@ def test(bidirectional, cell_type, depth,
         with tf.Session(config=config) as sess:
 
             model = SequenceToSequence(
-                input_vocab_size=len(ws_input),
-                target_vocab_size=len(ws_target),
+                input_vocab_size=len(ws),
+                target_vocab_size=len(ws),
                 batch_size=batch_size,
-                learning_rate=0.001,
                 bidirectional=bidirectional,
                 cell_type=cell_type,
                 depth=depth,
                 attention_type=attention_type,
                 use_residual=use_residual,
                 use_dropout=use_dropout,
+                hidden_units=hidden_units,
                 time_major=time_major,
-                hidden_units=64,
-                embedding_size=64,
-                parallel_iterations=1 # for test
+                learning_rate=0.001,
+                optimizer='adam',
+                share_embedding=True,
+                dropout=0.2,
+                pretrained_embedding=True
             )
             init = tf.global_variables_initializer()
             sess.run(init)
 
+            # 加载训练好的embedding
+            model.feed_embedding(sess, encoder=emb)
+
             # print(sess.run(model.input_layer.kernel))
             # exit(1)
 
+            flow = ThreadedGenerator(
+                batch_flow([x_data, y_data], ws, batch_size),
+                queue_maxsize=30)
+
             for epoch in range(1, n_epoch + 1):
                 costs = []
-                flow = batch_flow(
-                    [x_train, y_train], [ws_input, ws_target], batch_size
-                )
-                bar = tqdm(range(steps),
+                bar = tqdm(range(steps), total=steps,
                            desc='epoch {}, loss=0.000000'.format(epoch))
                 for _ in bar:
                     x, xl, y, yl = next(flow)
-                    cost = model.train(sess, x, xl, y, yl)
+                    x = np.flip(x, axis=1)
+                    # print(x, y)
+                    cost, lr = model.train(sess, x, xl, y, yl, return_lr=True)
                     costs.append(cost)
-                    bar.set_description('epoch {} loss={:.6f}'.format(
+                    bar.set_description('epoch {} loss={:.6f} lr={:.6f}'.format(
                         epoch,
-                        np.mean(costs)
+                        np.mean(costs),
+                        lr
                     ))
 
-            model.save(sess, save_path)
+                model.save(sess, save_path)
+
+            flow.close()
 
     # 测试部分
     tf.reset_default_graph()
     model_pred = SequenceToSequence(
-        input_vocab_size=len(ws_input),
-        target_vocab_size=len(ws_target),
+        input_vocab_size=len(ws),
+        target_vocab_size=len(ws),
         batch_size=1,
         mode='decode',
-        beam_width=5,
+        beam_width=12,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        hidden_units=hidden_units,
         time_major=time_major,
-        hidden_units=64,
-        embedding_size=64,
-        parallel_iterations=1 # for test
+        parallel_iterations=1,
+        learning_rate=0.001,
+        optimizer='adam',
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -113,38 +131,42 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow([x_test, y_test], [ws_input, ws_target], 1)
+        bar = batch_flow([x_data, y_data], ws, 1)
         t = 0
         for x, xl, y, yl in bar:
+            x = np.flip(x, axis=1)
             pred = model_pred.predict(
                 sess,
                 np.array(x),
                 np.array(xl)
             )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0]))
+            print(ws.inverse_transform(x[0]))
+            print(ws.inverse_transform(y[0]))
+            print(ws.inverse_transform(pred[0]))
             t += 1
             if t >= 3:
                 break
 
     tf.reset_default_graph()
     model_pred = SequenceToSequence(
-        input_vocab_size=len(ws_input),
-        target_vocab_size=len(ws_target),
+        input_vocab_size=len(ws),
+        target_vocab_size=len(ws),
         batch_size=1,
         mode='decode',
-        beam_width=0,
+        beam_width=1,
         bidirectional=bidirectional,
         cell_type=cell_type,
         depth=depth,
         attention_type=attention_type,
         use_residual=use_residual,
         use_dropout=use_dropout,
+        hidden_units=hidden_units,
         time_major=time_major,
-        hidden_units=64,
-        embedding_size=64,
-        parallel_iterations=1 # for test
+        parallel_iterations=1,
+        learning_rate=0.001,
+        optimizer='adam',
+        share_embedding=True,
+        pretrained_embedding=True
     )
     init = tf.global_variables_initializer()
 
@@ -152,7 +174,7 @@ def test(bidirectional, cell_type, depth,
         sess.run(init)
         model_pred.load(sess, save_path)
 
-        bar = batch_flow([x_test, y_test], [ws_input, ws_target], 1)
+        bar = batch_flow([x_data, y_data], ws, 1)
         t = 0
         for x, xl, y, yl in bar:
             pred = model_pred.predict(
@@ -160,15 +182,12 @@ def test(bidirectional, cell_type, depth,
                 np.array(x),
                 np.array(xl)
             )
-            print(ws_input.inverse_transform(x[0]))
-            print(ws_target.inverse_transform(y[0]))
-            print(ws_target.inverse_transform(pred[0]))
+            print(ws.inverse_transform(x[0]))
+            print(ws.inverse_transform(y[0]))
+            print(ws.inverse_transform(pred[0]))
             t += 1
             if t >= 3:
                 break
-
-    # return last train loss
-    return np.mean(costs)
 
 
 def main():
@@ -176,35 +195,16 @@ def main():
     random.seed(0)
     np.random.seed(0)
     tf.set_random_seed(0)
-
-    params = OrderedDict((
-        ('cell_type', ('gru', 'lstm')),
-        ('attention_type', ('Luong', 'Bahdanau')),
-        ('use_dropout', (True, False)),
-        ('time_major', (True, False)),
-        ('depth', (1, 2, 3)),
-        ('bidirectional', (True, False)),
-        ('use_residual', (True, False)),
-    ))
-
-    loop = itertools.product(*params.values())
-
-    rows = []
-    for param_value in loop:
-        param = OrderedDict(zip(params.keys(), param_value))
-        print('=' * 30)
-        row = []
-        for key, value in param.items():
-            print(key, ':', value)
-            row.append(value)
-        print('-' * 30)
-        cost = test(**param)
-        row += [cost]
-        rows.append(row)
-
-    columns = list(params.keys()) + ['loss']
-    dframe = pd.DataFrame(rows, columns=columns)
-    dframe.to_excel('/tmp/s2ss_test.xlsx')
+    test(
+        bidirectional=True,
+        cell_type='lstm',
+        depth=2,
+        attention_type='Bahdanau',
+        use_residual=False,
+        use_dropout=False,
+        time_major=False,
+        hidden_units=512
+    )
 
 
 if __name__ == '__main__':

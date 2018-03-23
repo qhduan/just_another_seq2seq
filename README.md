@@ -11,13 +11,28 @@
 - [x] 后续我可能会添加一些中文的例子，例如对联、古诗、闲聊、NER
 - [x] 根据本repo，我会整理一份seq2seq中间的各种trick和实现细节的坑
     - [参考这里](https://github.com/qhduan/ConversationalRobotDesign/tree/master/%E8%81%8A%E5%A4%A9%E6%9C%BA%E5%99%A8%E4%BA%BA%EF%BC%9A%E7%A5%9E%E7%BB%8F%E5%AF%B9%E8%AF%9D%E6%A8%A1%E5%9E%8B%E7%9A%84%E5%AE%9E%E7%8E%B0%E4%B8%8E%E6%8A%80%E5%B7%A7)
-- [ ] pretrained embedding support
-- [ ] 后续这个repo会作为一个基础完成一个dialogue system
+- [x] pretrained embedding support
+    - 参考[chatbot_cut](chatbot_cut/)
+- [ ] 后续这个repo会作为一个基础完成一个dialogue system（的一部分，例如NLU）
     - seq2seq模型至少可以作为通用NER实现
     - 截止2018年初，最好的NER应该还是bi-LSTM + CRF，也有不加CRF效果好的
-    - 当然这个不完全算seq2seq啦
+
+
+[作者的一系列小文章，欢迎吐槽](https://github.com/qhduan/ConversationalRobotDesign)
 
 # Update Log
+
+2018-03-10
+
+我把一些代码内的trick设置的更接近NMT了。
+
+尝试训练更好的chatbot模型（嘬死）。
+
+添加了一个支持加载训练好的embedding的模型，参考[chatbot_cut/](chatbot_cut/)，
+这个例子是“词级的”，
+分词用的jieba，
+默认的预训练模型是fasttext，
+详情点击看文档、代码。
 
 2018-03-06
 
@@ -37,6 +52,34 @@
 
 Example里的例子和整个项目，虽然未经验证，但是在内存较小的电脑上（<8GB），可能会有问题。
 这涉及到数据处理、数据输入、模型参数等部分，所以严格来说并不算BUG。
+
+chatbot模型根本没有一个什么是`“好”`的评价标准，
+也根本没有`“好”`的数据。
+所以不要对结果有过度期待，仅供娱乐。
+如果你问我仅供娱乐还写它干嘛？
+本repo只是为了实现各种seq2seq技术，
+也有有用的翻译和NER啊，
+当然很多部分都是学习与研究性质的，工业化需要很多改进。
+chatbot部分虽然我花了不少时间，
+但是那个还只是娱乐而已，
+实际应用起来，对话质量、系统成本可能很高。
+我能保证的只是，这个模型基本上没原则性问题而已，
+至少给一个参考，看看我写的垃圾代码和别人写的代码的区别，是吧。
+
+当然也不是说就是不能用，例如你能自己搞一些质量很高的数据啦。
+比如说[这位仁兄的repo](https://github.com/bshao001/ChatLearner)
+他就自己弄了一份质量很高的数据，
+搭配一些合理的扩展，
+例如给数据添加功能性词汇 `_func_get_current_time` 之类感觉的东西，
+就能让chatbot实现一些简单功能。
+
+简单的说就是把训练数据设置为，
+上一句是`现 在 几 点`，
+下一句是`现 在 时 间 _func_get_current_time`，
+这样在输出部分如果解析到`_func_get_current_time`这个词
+就自动替换为时间的话，
+就可以得到类似“报时”的功能了。
+（技术没有好坏，应用在哪最重要！～～这句话是不是很装逼）
 
 # Platform
 
@@ -80,12 +123,13 @@ Input English Sentence:i'm really a bad boy
 ['我', '真的', '是', '一个', '坏', '男孩', '</s>', '</s>', '</s>', '</s>', '</s>', '</s>']
 ```
 
-
 [NER实例](/ner/)
 
 [Chatbot实例](/chatbot/)
 
-[Chatbot Adversarial实例](/chatbot_ad/)
+
+`test_atten.py` 脚本，测试并展示 attention 的热力图
+
 
 # TensorFlow alert
 
@@ -131,6 +175,10 @@ https://github.com/tensorflow/tensor2tensor
 Another seq2seq repo:
 
 https://github.com/ematvey/tensorflow-seq2seq-tutorials
+
+A very nice chatbot example:
+
+https://github.com/bshao001/ChatLearner
 
 
 # pylint
