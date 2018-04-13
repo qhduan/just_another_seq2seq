@@ -26,8 +26,8 @@ def test(params):
     ws = pickle.load(open('ws.pkl', 'rb'))
 
     # 训练部分
-    n_epoch = 5
-    batch_size = 32
+    n_epoch = 2
+    batch_size = 128
     # x_data, y_data = shuffle(x_data, y_data, random_state=0)
     # x_data = x_data[:100000]
     # y_data = y_data[:100000]
