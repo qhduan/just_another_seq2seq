@@ -6,7 +6,7 @@
     "cell_type": "lstm",
     "depth": 2,
     "attention_type": "Bahdanau",
-    "hidden_units": 1024,
+    "hidden_units": 128,
     "optimizer": "adam",
     "learning_rate": 0.001,
     "embedding_size": 300
