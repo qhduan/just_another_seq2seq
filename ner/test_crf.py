@@ -32,7 +32,7 @@ def test(bidirectional, cell_type, depth,
         log_device_placement=False
     )
 
-    save_path = '/tmp/s2ss_ner_crf.ckpt'
+    save_path = './s2ss_crf.ckpt'
 
     # 测试部分
     tf.reset_default_graph()
@@ -59,7 +59,7 @@ def test(bidirectional, cell_type, depth,
         model_pred.load(sess, save_path)
 
         while True:
-            user_text = input('Input English Sentence:')
+            user_text = input('Input Sentence:')
             if user_text in ('exit', 'quit'):
                 exit(0)
             x_test = [list(user_text.lower())]

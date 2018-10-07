@@ -139,21 +139,21 @@ def test(bidirectional, cell_type, depth,
 
                 pp = predict[:yl[j]]
                 rr = right[:yl[j]]
-                if rr:
+                if len(rr) > 0:
                     acc.append(np.sum(pp == rr) / len(rr))
 
                 pp = predict[:yl[j]]
                 rr = right[:yl[j]]
                 pp = pp[rr != 'O']
                 rr = rr[rr != 'O']
-                if rr:
+                if len(rr) > 0:
                     rec.append(np.sum(pp == rr) / len(rr))
 
                 pp = predict[:yl[j]]
                 rr = right[:yl[j]]
                 rr = rr[pp != 'O']
                 pp = pp[pp != 'O']
-                if rr:
+                if len(rr) > 0:
                     prec.append(np.sum(pp == rr) / len(rr))
 
             if i < 3:
