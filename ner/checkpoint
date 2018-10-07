@@ -1,2 +1,2 @@
-model_checkpoint_path: "s2ss_crf.ckpt"
-all_model_checkpoint_paths: "s2ss_crf.ckpt"
+model_checkpoint_path: "s2ss_nocrf.ckpt"
+all_model_checkpoint_paths: "s2ss_nocrf.ckpt"

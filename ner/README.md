@@ -23,13 +23,9 @@ wget "https://raw.githubusercontent.com/lancopku/Chinese-Literature-NER-RE-Datas
 
 ## 3、训练数据
 
-#### seq2seq 模型
+### crf 模型
 
-运行 `train.py` 训练（默认到`/tmp/s2ss_ner.ckpt`）
-
-### 或者 crf 模型
-
-运行 `train_crf.py` 训练（默认到`/tmp/s2ss_ner_crf.ckpt`）
+运行 `train_crf_loss.py` 训练（默认到`./s2ss_ner_crf.ckpt`）
 
 ## 4、测试数据（测试翻译）
 
