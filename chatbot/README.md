@@ -6,7 +6,7 @@
 Subtitle data from [here](https://github.com/fateleak/dgk_lost_conv)
 
 ```
-wget https://github.com/fateleak/dgk_lost_conv/raw/master/dgk_shooter_min.conv.zip
+wget https://lvzhe.oss-cn-beijing.aliyuncs.com/dgk_shooter_min.conv.zip
 ```
 
 输出：`dgk_shooter_min.conv.zip`
